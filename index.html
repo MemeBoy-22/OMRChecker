@@ -1,30 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OMR Answer Sheet Checker</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #canvas { display: none; }
-    .result-box { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>OMR Sheet Checker</h1>
+  <div class="container">
+    <header>
+      <h1>OMR Sheet Checker</h1>
+      <p>Upload answer key and scanned OMR sheets to automatically grade them</p>
+    </header>
 
-  <p><b>Step 1:</b> Upload answer key (JSON or TXT)</p>
-  <input type="file" id="keyFile"><br><br>
+    <div class="controls">
+      <div class="upload-section">
+        <h2>1. Upload Answer Key</h2>
+        <input type="file" id="keyFile" accept=".json,.txt">
+        <div id="keyInfo"></div>
+      </div>
 
-  <p><b>Step 2:</b> Upload scanned OMR sheet(s) (image files)</p>
-  <input type="file" id="sheetImage" accept="image/*" multiple><br><br>
+      <div class="upload-section">
+        <h2>2. Upload OMR Sheets</h2>
+        <input type="file" id="sheetImage" accept="image/*" multiple>
+        <div id="sheetInfo"></div>
+      </div>
 
-  <button onclick="checkOMR()">Check Sheet(s)</button>
+      <div class="mode-selector">
+        <h2>Processing Mode</h2>
+        <label>
+          <input type="radio" name="mode" value="generic" checked>
+          <span>Generic OMR (Auto-detect bubbles)</span>
+        </label>
+        <label>
+          <input type="radio" name="mode" value="specific">
+          <span>Specific OMR (Fixed layout)</span>
+        </label>
+      </div>
 
-  <h2>Results:</h2>
-  <div id="result"></div>
+      <button id="processBtn" class="btn">Process Sheets</button>
+    </div>
+
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar" id="progressBar"></div>
+      <div id="progressText">0%</div>
+    </div>
+
+    <div class="results" id="results">
+      <h2>Results</h2>
+      <div id="resultContainer"></div>
+    </div>
+  </div>
 
   <canvas id="canvas"></canvas>
 
-  <script async src="https://docs.opencv.org/4.9.0/opencv.js"></script>
-  <script src="omr_checker.js"></script>
+  <script src="https://docs.opencv.org/4.9.0/opencv.js" async></script>
+  <script src="script.js"></script>
 </body>
 </html>
