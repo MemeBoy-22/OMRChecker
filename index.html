@@ -138,6 +138,8 @@
             width: 100%;
             height: auto;
             display: block;
+            transform: rotate(-90deg);
+            transform-origin: top left;
         }
 
         canvas {
@@ -157,7 +159,7 @@
         .overlay svg {
             width: 100%;
             height: 100%;
-            transform: rotate(-90deg);
+            transform: rotate(0deg);
             transform-origin: center;
         }
 
@@ -355,7 +357,7 @@
                     <video id="video" autoplay playsinline></video>
                     <div class="overlay">
                         <svg>
-                            <rect class="alignment-guide" x="15%" y="10%" width="70%" height="80%" rx="10" transform="rotate(-90 50% 50%)"/>
+                            <rect class="alignment-guide" x="15%" y="10%" width="70%" height="80%" rx="10"/>
                             <circle class="corner-marker" cx="15%" cy="10%" r="8"/>
                             <circle class="corner-marker" cx="85%" cy="10%" r="8"/>
                             <circle class="corner-marker" cx="85%" cy="90%" r="8"/>
@@ -520,8 +522,8 @@
                 const constraints = {
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 720 },
+                        height: { ideal: 1280 }
                     }
                 };
 
@@ -537,12 +539,13 @@
 
                 await video.play();
 
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+                // Swap width and height due to rotation
+                canvas.width = video.videoHeight;
+                canvas.height = video.videoWidth;
                 processCanvas.width = canvas.width;
                 processCanvas.height = canvas.height;
 
-                console.log('Video dimensions:', canvas.width, 'x', canvas.height);
+                console.log('Video dimensions (after rotation):', canvas.width, 'x', canvas.height);
 
                 const startBtn = document.getElementById('startCamera');
                 startBtn.textContent = 'Camera Active ✓';
@@ -602,7 +605,13 @@
             showProcessing(true);
 
             try {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                // Adjust for rotated video feed
+                ctx.save();
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(Math.PI / 2);
+                ctx.drawImage(video, -canvas.height / 2, -canvas.width / 2, canvas.height, canvas.width);
+                ctx.restore();
+
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const results = await processOMRSheet(imageData);
 
@@ -1023,17 +1032,22 @@
 
             function checkAlignment() {
                 if (!isAligned) {
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx.save();
+                    ctx.translate(canvas.width / 2, canvas.height / 2);
+                    ctx.rotate(Math.PI / 2);
+                    ctx.drawImage(video, -canvas.height / 2, -canvas.width / 2, canvas.height, canvas.width);
+                    ctx.restore();
+
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const grayData = convertToGrayscale(imageData);
                     const boundaries = detectOMRBoundaries(grayData);
 
                     if (boundaries) {
                         const { x, y, width, height } = boundaries;
-                        const guideX = canvas.width * 0.15;
-                        const guideY = canvas.height * 0.10;
-                        const guideWidth = canvas.width * 0.70;
-                        const guideHeight = canvas.height * 0.80;
+                        const guideX = canvas.width * 0.10;
+                        const guideY = canvas.height * 0.15;
+                        const guideWidth = canvas.height * 0.80;
+                        const guideHeight = canvas.width * 0.70;
 
                         const dx = Math.abs(x - guideX);
                         const dy = Math.abs(y - guideY);
