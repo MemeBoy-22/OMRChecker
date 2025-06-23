@@ -2,38 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>OMR Answer Sheet Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OMR Answer Scanner</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1>OMR Sheet Scanner</h1>
-      <p>Align your answer sheet within the frame below</p>
-    </header>
-
-    <div class="scanner-container">
-      <div id="scannerOverlay">
-        <!-- Overlay elements will be added here -->
-      </div>
-      <div id="cameraPreview"></div>
+    <h1>OMR Answer Scanner</h1>
+    
+    <div class="scanner-section">
+      <div id="cameraView"></div>
+      <div id="overlay"></div>
     </div>
-
+    
     <div class="controls">
-      <button id="startCameraBtn" class="btn">Start Camera</button>
-      <button id="captureBtn" class="btn" disabled>Capture Sheet</button>
-      <button id="toggleFlashBtn" class="btn" disabled>Toggle Flash</button>
+      <button id="scanKeyBtn" class="btn">1. Scan Answer Key</button>
+      <button id="scanAnswersBtn" class="btn" disabled>2. Scan Student Answers</button>
+      <button id="resetBtn" class="btn secondary">Reset</button>
     </div>
-
-    <div class="results" id="results">
-      <h2>Results</h2>
-      <div id="resultContainer"></div>
+    
+    <div id="results">
+      <h2>Results: <span id="score">-</span>/20</h2>
+      <div id="answerComparison"></div>
     </div>
   </div>
 
   <canvas id="processingCanvas"></canvas>
-
+  
   <script src="https://docs.opencv.org/4.9.0/opencv.js" async></script>
   <script src="scanner.js"></script>
 </body>
