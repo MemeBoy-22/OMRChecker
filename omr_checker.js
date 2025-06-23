@@ -1,10 +1,20 @@
 // Global variables
 let cvReady = false;
+let stream = null;
+let videoElement = null;
+let flashOn = false;
 let answerKey = [];
-let filesToProcess = [];
-let processingMode = 'generic';
 
-// OpenCV initialization
+// DOM elements
+const startCameraBtn = document.getElementById('startCameraBtn');
+const captureBtn = document.getElementById('captureBtn');
+const toggleFlashBtn = document.getElementById('toggleFlashBtn');
+const cameraPreview = document.getElementById('cameraPreview');
+const scannerOverlay = document.getElementById('scannerOverlay');
+const resultContainer = document.getElementById('resultContainer');
+const processingCanvas = document.getElementById('processingCanvas');
+
+// Initialize OpenCV
 function initializeOpenCV() {
   return new Promise((resolve) => {
     if (window.cv) {
@@ -20,154 +30,155 @@ function initializeOpenCV() {
   });
 }
 
-// DOM elements
-const keyFileInput = document.getElementById('keyFile');
-const sheetImageInput = document.getElementById('sheetImage');
-const processBtn = document.getElementById('processBtn');
-const resultContainer = document.getElementById('resultContainer');
-const progressContainer = document.getElementById('progressContainer');
-const progressBar = document.getElementById('progressBar');
-const progressText = document.getElementById('progressText');
-const keyInfo = document.getElementById('keyInfo');
-const sheetInfo = document.getElementById('sheetInfo');
+// Create scanner overlay
+function createScannerOverlay() {
+  scannerOverlay.innerHTML = '';
+  
+  // ID section overlay
+  const idOverlay = document.createElement('div');
+  idOverlay.id = 'idOverlay';
+  idOverlay.className = 'overlay-guide';
+  idOverlay.title = 'Align ID section here';
+  scannerOverlay.appendChild(idOverlay);
+  
+  // Questions section overlay
+  const questionsOverlay = document.createElement('div');
+  questionsOverlay.id = 'questionsOverlay';
+  questionsOverlay.className = 'overlay-guide';
+  questionsOverlay.title = 'Align questions here';
+  scannerOverlay.appendChild(questionsOverlay);
+}
 
-// Event listeners
-document.addEventListener('DOMContentLoaded', () => {
-  initializeOpenCV().then(() => {
-    processBtn.disabled = false;
-  });
-  
-  // Mode selection
-  document.querySelectorAll('input[name="mode"]').forEach(radio => {
-    radio.addEventListener('change', (e) => {
-      processingMode = e.target.value;
-    });
-  });
-  
-  // Answer key upload
-  keyFileInput.addEventListener('change', handleKeyUpload);
-  
-  // Sheet images upload
-  sheetImageInput.addEventListener('change', handleSheetUpload);
-  
-  // Process button
-  processBtn.addEventListener('click', processSheets);
-});
-
-function handleKeyUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const content = e.target.result.trim();
-      answerKey = content.startsWith('[') 
-        ? JSON.parse(content) 
-        : content.split('\n').map(x => x.trim()).filter(x => x);
-      
-      keyInfo.innerHTML = `
-        <div class="upload-info">
-          <strong>Loaded:</strong> ${file.name}<br>
-          <strong>Questions:</strong> ${answerKey.length}
-        </div>
-      `;
-      
-      console.log('Answer key loaded:', answerKey);
-    } catch (error) {
-      keyInfo.innerHTML = `<div class="upload-error">Error: ${error.message}</div>`;
-      console.error('Error parsing answer key:', error);
+// Start camera
+async function startCamera() {
+  try {
+    // Check for camera support
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Camera access not supported by your browser');
     }
-  };
-  reader.readAsText(file);
-}
-
-function handleSheetUpload(event) {
-  filesToProcess = Array.from(event.target.files);
-  
-  sheetInfo.innerHTML = `
-    <div class="upload-info">
-      <strong>Selected:</strong> ${filesToProcess.length} file(s)
-    </div>
-  `;
-}
-
-async function processSheets() {
-  // Validate inputs
-  if (answerKey.length === 0) {
-    alert('Please upload a valid answer key first');
-    return;
-  }
-  
-  if (filesToProcess.length === 0) {
-    alert('Please upload at least one OMR sheet image');
-    return;
-  }
-  
-  if (!cvReady) {
-    alert('OpenCV is still loading. Please wait...');
-    return;
-  }
-  
-  // Reset UI
-  resultContainer.innerHTML = '';
-  progressContainer.style.display = 'block';
-  updateProgress(0);
-  processBtn.disabled = true;
-  
-  // Process each sheet
-  for (let i = 0; i < filesToProcess.length; i++) {
-    const file = filesToProcess[i];
-    const result = await processSheet(file);
     
-    displayResult(result, i);
-    updateProgress(((i + 1) / filesToProcess.length) * 100);
+    // Request camera access
+    stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      } 
+    });
+    
+    // Create video element
+    videoElement = document.createElement('video');
+    videoElement.srcObject = stream;
+    videoElement.setAttribute('playsinline', '');
+    videoElement.play();
+    
+    // Clear preview and add video
+    cameraPreview.innerHTML = '';
+    cameraPreview.appendChild(videoElement);
+    
+    // Enable buttons
+    captureBtn.disabled = false;
+    toggleFlashBtn.disabled = false;
+    startCameraBtn.disabled = true;
+    
+    // Create overlay
+    createScannerOverlay();
+    
+    // Start alignment detection
+    detectAlignment();
+    
+  } catch (error) {
+    alert(`Camera error: ${error.message}`);
+    console.error('Camera error:', error);
+  }
+}
+
+// Detect alignment quality
+function detectAlignment() {
+  if (!videoElement) return;
+  
+  // Create canvas for alignment detection
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = videoElement.videoWidth;
+  canvas.height = videoElement.videoHeight;
+  
+  // Draw frame and analyze
+  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  
+  // Check for black borders (simplified)
+  const borderThreshold = 50; // Dark enough to be border
+  let borderMatches = 0;
+  let totalBorderPixels = 0;
+  
+  // Sample border pixels
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const r = imageData.data[i];
+    const g = imageData.data[i + 1];
+    const b = imageData.data[i + 2];
+    const brightness = (r + g + b) / 3;
+    
+    // Check if pixel is in border area
+    const x = (i / 4) % canvas.width;
+    const y = Math.floor((i / 4) / canvas.width);
+    
+    if (x < 10 || x > canvas.width - 10 || y < 10 || y > canvas.height - 10) {
+      totalBorderPixels++;
+      if (brightness < borderThreshold) {
+        borderMatches++;
+      }
+    }
   }
   
-  processBtn.disabled = false;
-}
-
-function updateProgress(percent) {
-  progressBar.style.width = `${percent}%`;
-  progressText.textContent = `${Math.round(percent)}%`;
-}
-
-async function processSheet(file) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.getElementById('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      // Set canvas dimensions
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      
-      // Process based on mode
-      let result;
-      try {
-        if (processingMode === 'specific') {
-          result = processSpecificOMR(canvas);
-        } else {
-          result = processGenericOMR(canvas);
-        }
-        
-        result.fileName = file.name;
-        resolve(result);
-      } catch (error) {
-        console.error('Error processing sheet:', error);
-        resolve({
-          fileName: file.name,
-          error: error.message
-        });
-      }
-    };
-    img.src = URL.createObjectURL(file);
+  // Calculate alignment score
+  const alignmentScore = borderMatches / totalBorderPixels;
+  const isAligned = alignmentScore > 0.7; // 70% of border is dark
+  
+  // Update UI
+  const overlayElements = document.querySelectorAll('.overlay-guide');
+  overlayElements.forEach(el => {
+    el.classList.remove('alignment-good', 'alignment-bad');
+    el.classList.add(isAligned ? 'alignment-good' : 'alignment-bad');
   });
+  
+  // Continue monitoring
+  requestAnimationFrame(detectAlignment);
 }
 
-function processGenericOMR(canvas) {
+// Capture image
+async function captureImage() {
+  if (!videoElement) return;
+  
+  try {
+    // Add flash effect
+    cameraPreview.classList.add('flash-effect');
+    setTimeout(() => cameraPreview.classList.remove('flash-effect'), 500);
+    
+    // Create canvas from video frame
+    processingCanvas.width = videoElement.videoWidth;
+    processingCanvas.height = videoElement.videoHeight;
+    const ctx = processingCanvas.getContext('2d');
+    ctx.drawImage(videoElement, 0, 0, processingCanvas.width, processingCanvas.height);
+    
+    // Process the OMR sheet
+    const result = await processOMRSheet(processingCanvas);
+    
+    // Display results
+    displayResults(result);
+    
+  } catch (error) {
+    alert(`Processing error: ${error.message}`);
+    console.error('Processing error:', error);
+  }
+}
+
+// Process OMR sheet
+async function processOMRSheet(canvas) {
+  if (!cvReady) {
+    throw new Error('OpenCV is not ready yet');
+  }
+  
   const src = cv.imread(canvas);
   
   // Preprocessing pipeline
@@ -188,200 +199,19 @@ function processGenericOMR(canvas) {
     2
   );
   
-  // Find contours
-  const contours = new cv.MatVector();
-  const hierarchy = new cv.Mat();
-  cv.findContours(
-    thresh,
-    contours,
-    hierarchy,
-    cv.RETR_EXTERNAL,
-    cv.CHAIN_APPROX_SIMPLE
-  );
-  
-  // Process contours
-  const bubbleContours = [];
-  for (let i = 0; i < contours.size(); i++) {
-    const contour = contours.get(i);
-    const area = cv.contourArea(contour);
-    
-    // Filter by size
-    if (area < 100 || area > 5000) continue;
-    
-    const perimeter = cv.arcLength(contour, true);
-    const circularity = (4 * Math.PI * area) / (perimeter * perimeter);
-    
-    // Filter by circularity
-    if (circularity > 0.7) {
-      bubbleContours.push(contour);
-    }
-  }
-  
-  // Sort bubbles by position
-  bubbleContours.sort((a, b) => {
-    const rectA = cv.boundingRect(a);
-    const rectB = cv.boundingRect(b);
-    
-    // Compare by vertical position first
-    const yDiff = rectA.y - rectB.y;
-    if (Math.abs(yDiff) > 10) return yDiff;
-    
-    // Then horizontal position
-    return rectA.x - rectB.x;
-  });
-  
-  // Group bubbles into rows (questions)
-  const rows = [];
-  let currentRow = [];
-  let lastY = -1;
-  
-  bubbleContours.forEach(contour => {
-    const rect = cv.boundingRect(contour);
-    if (lastY === -1) lastY = rect.y;
-    
-    // New row if Y position changes significantly
-    if (Math.abs(rect.y - lastY) > 10) {
-      if (currentRow.length > 0) rows.push(currentRow);
-      currentRow = [];
-      lastY = rect.y;
-    }
-    
-    currentRow.push({ contour, rect });
-  });
-  if (currentRow.length > 0) rows.push(currentRow);
-  
-  // Process answers
-  const sheetAnswers = [];
-  const questionCount = Math.min(rows.length, answerKey.length);
-  
-  for (let i = 0; i < questionCount; i++) {
-    const row = rows[i];
-    // Sort row horizontally
-    row.sort((a, b) => a.rect.x - b.rect.x);
-    
-    // Find marked bubble
-    let markedIndex = -1;
-    let maxFillRatio = 0;
-    
-    for (let j = 0; j < Math.min(row.length, 5); j++) {
-      const { rect } = row[j];
-      const bubbleRegion = thresh.roi(rect);
-      
-      // Calculate fill ratio
-      const filled = cv.countNonZero(bubbleRegion);
-      const total = rect.width * rect.height;
-      const fillRatio = filled / total;
-      
-      bubbleRegion.delete();
-      
-      if (fillRatio > 0.5 && fillRatio > maxFillRatio) {
-        maxFillRatio = fillRatio;
-        markedIndex = j;
-      }
-    }
-    
-    sheetAnswers.push(markedIndex !== -1 ? ['A','B','C','D','E'][markedIndex] : null);
-  }
-  
-  // Calculate score
-  let score = 0;
-  const details = [];
-  
-  for (let i = 0; i < questionCount; i++) {
-    const correct = sheetAnswers[i] === answerKey[i];
-    if (correct) score++;
-    
-    details.push({
-      question: i + 1,
-      answered: sheetAnswers[i],
-      correct: answerKey[i],
-      isCorrect: correct
-    });
-  }
-  
-  // Clean up
-  src.delete();
-  gray.delete();
-  blur.delete();
-  thresh.delete();
-  contours.delete();
-  hierarchy.delete();
-  
-  return {
-    score,
-    total: questionCount,
-    percentage: Math.round((score / questionCount) * 100),
-    details,
-    type: 'generic'
-  };
-}
-
-function processSpecificOMR(canvas) {
-  const src = cv.imread(canvas);
-  
-  // Preprocessing
-  const gray = new cv.Mat();
-  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-  
-  const thresh = new cv.Mat();
-  cv.adaptiveThreshold(
-    gray, 
-    thresh, 
-    255, 
-    cv.ADAPTIVE_THRESH_MEAN_C, 
-    cv.THRESH_BINARY_INV, 
-    15, 
-    10
-  );
-  
-  // Answer bubbles (20 × 5)
-  const rows = 20, cols = 5;
-  const startX = 135, startY = 190,
-        rowGap = 31.5, colGap = 33.5, bubbleSize = 22;
-  const bubbleAnswers = [];
-  
-  for (let r = 0; r < rows; r++) {
-    let maxVal = -1, marked = 0;
-    for (let c = 0; c < cols; c++) {
-      const x = Math.round(startX + c * colGap),
-            y = Math.round(startY + r * rowGap);
-      const bubble = thresh.roi(new cv.Rect(x, y, bubbleSize, bubbleSize));
-      const nonZero = cv.countNonZero(bubble);
-      if (nonZero > maxVal) {
-        maxVal = nonZero;
-        marked = c;
-      }
-      bubble.delete();
-    }
-    bubbleAnswers.push(['A','B','C','D','E'][marked]);
-  }
-  
-  // Score calculation
-  let score = 0;
-  const details = [];
-  const questionCount = Math.min(bubbleAnswers.length, answerKey.length);
-  
-  for (let i = 0; i < questionCount; i++) {
-    const correct = bubbleAnswers[i] === answerKey[i];
-    if (correct) score++;
-    
-    details.push({
-      question: i + 1,
-      answered: bubbleAnswers[i],
-      correct: answerKey[i],
-      isCorrect: correct
-    });
-  }
-  
-  // 4-digit ID detection
-  const idStartX = 620, idStartY = 220,
-        idColGap = 40, idRowGap = 27, idSize = 22;
+  // Process ID section (4 digits)
   const idDigits = [];
+  const idStartX = 0.7 * canvas.width; // Adjust based on your overlay
+  const idStartY = 0.1 * canvas.height;
+  const idColGap = 0.05 * canvas.width;
+  const idRowGap = 0.03 * canvas.height;
+  const idSize = 0.04 * canvas.width;
+  
   for (let c = 0; c < 4; c++) {
     let maxVal = -1, digit = 0;
     for (let r = 0; r < 10; r++) {
-      const x = idStartX + c * idColGap,
-            y = idStartY + r * idRowGap;
+      const x = Math.round(idStartX + c * idColGap);
+      const y = Math.round(idStartY + r * idRowGap);
       const cell = thresh.roi(new cv.Rect(x, y, idSize, idSize));
       const val = cv.countNonZero(cell);
       if (val > maxVal) {
@@ -393,49 +223,100 @@ function processSpecificOMR(canvas) {
     idDigits.push(digit);
   }
   
+  // Process answer bubbles (20 questions × 5 choices)
+  const answers = [];
+  const qStartX = 0.1 * canvas.width;
+  const qStartY = 0.25 * canvas.height;
+  const qColGap = 0.08 * canvas.width;
+  const qRowGap = 0.03 * canvas.height;
+  const qSize = 0.04 * canvas.width;
+  
+  for (let r = 0; r < 20; r++) {
+    let maxVal = -1, marked = 0;
+    for (let c = 0; c < 5; c++) {
+      const x = Math.round(qStartX + c * qColGap);
+      const y = Math.round(qStartY + r * qRowGap);
+      const bubble = thresh.roi(new cv.Rect(x, y, qSize, qSize));
+      const nonZero = cv.countNonZero(bubble);
+      if (nonZero > maxVal) {
+        maxVal = nonZero;
+        marked = c;
+      }
+      bubble.delete();
+    }
+    answers.push(['A', 'B', 'C', 'D', 'E'][marked]);
+  }
+  
   // Clean up
   src.delete();
   gray.delete();
+  blur.delete();
   thresh.delete();
   
   return {
-    score,
-    total: questionCount,
-    percentage: Math.round((score / questionCount) * 100),
-    details,
     id: idDigits.join(''),
-    type: 'specific'
+    answers,
+    timestamp: new Date().toLocaleString()
   };
 }
 
-function displayResult(result, index) {
+// Display results
+function displayResults(result) {
   const resultBox = document.createElement('div');
   resultBox.className = 'result-box';
   
   let content = `
-    <h3>Sheet ${index + 1}: ${result.fileName}</h3>
-    <p><strong>Score:</strong> ${result.score}/${result.total} (${result.percentage}%)</p>
+    <h3>Scan Results</h3>
+    <p><strong>ID:</strong> ${result.id}</p>
+    <p><strong>Time:</strong> ${result.timestamp}</p>
+    <div class="answers-grid">
   `;
   
-  if (result.type === 'specific') {
-    content += `<p><strong>ID:</strong> ${result.id}</p>`;
+  // Display answers in a grid
+  for (let i = 0; i < result.answers.length; i++) {
+    content += `
+      <div class="answer-item">
+        <span class="question-num">${i + 1}</span>
+        <span class="answer-value">${result.answers[i]}</span>
+      </div>
+    `;
   }
   
-  if (result.error) {
-    content += `<div class="error">Error: ${result.error}</div>`;
-  } else {
-    content += `<div class="details">`;
-    result.details.forEach(d => {
-      content += `
-        <div class="question-result ${d.isCorrect ? 'correct' : 'incorrect'}">
-          Q${d.question}: ${d.answered || 'Unanswered'} 
-          ${d.isCorrect ? '✓' : `✗ (Correct: ${d.correct})`}
-        </div>
-      `;
-    });
-    content += `</div>`;
-  }
-  
+  content += `</div>`;
   resultBox.innerHTML = content;
   resultContainer.appendChild(resultBox);
 }
+
+// Toggle flash
+function toggleFlash() {
+  if (!stream) return;
+  
+  const videoTrack = stream.getVideoTracks()[0];
+  if (!videoTrack || !('applyConstraints' in videoTrack)) {
+    alert('Flash not supported on this device');
+    return;
+  }
+  
+  flashOn = !flashOn;
+  toggleFlashBtn.textContent = flashOn ? 'Flash ON' : 'Flash OFF';
+  
+  videoTrack.applyConstraints({
+    advanced: [{ torch: flashOn }]
+  }).catch(e => console.error('Flash error:', e));
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', async () => {
+  await initializeOpenCV();
+  
+  startCameraBtn.addEventListener('click', startCamera);
+  captureBtn.addEventListener('click', captureImage);
+  toggleFlashBtn.addEventListener('click', toggleFlash);
+  
+  // Clean up camera on page unload
+  window.addEventListener('beforeunload', () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+  });
+});
