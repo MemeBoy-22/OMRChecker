@@ -420,3 +420,150 @@
                     <div class="result-header">Instructions</div>
                     <ol style="padding-left: 20px; line-height: 1.6;">
                         <li>First, scan the answer key sheet in "Answer Key Mode"</li>
+                        <li>Switch to "Evaluate Mode" to scan student answer sheets</li>
+                        <li>Hold the device in <strong>landscape orientation</strong> and align the OMR sheet within the green guide rectangle</li>
+                        <li>Ensure all corners are visible and the sheet is well-lit</li>
+                        <li>Click the capture button or tap the screen to scan</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="processing" id="processing">
+        <div style="text-align: center;">
+            <div class="spinner"></div>
+            <div>Processing OMR Sheet...</div>
+        </div>
+    </div>
+
+    <script>
+        // Browser compatibility check
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !HTMLCanvasElement.prototype.getContext) {
+            alert('This browser does not support required APIs. Please use Chrome, Firefox, or Safari.');
+            throw new Error('Unsupported browser');
+        }
+
+        let video, canvas, ctx, processCanvas, processCtx;
+        let isAnswerKeyMode = true;
+        let answerKey = null;
+        let stream = null;
+
+        // OMR Sheet configuration
+        const OMR_CONFIG = {
+            questions: 20,
+            optionsPerQuestion: 5,
+            options: ['A', 'B', 'C', 'D', 'E'],
+            idDigits: 4
+        };
+
+        // Initialize application
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                initializeElements();
+                setupEventListeners();
+                checkCameraAvailability();
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                showError('Application failed to load. Check console for details.');
+            }
+        });
+
+        function initializeElements() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            processCanvas = document.getElementById('processCanvas');
+            processCtx = processCanvas.getContext('2d');
+
+            // Ensure buttons are enabled
+            document.getElementById('startCamera').disabled = false;
+            document.getElementById('setAnswerKey').disabled = false;
+            document.getElementById('evaluateMode').disabled = false;
+            document.getElementById('captureBtn').disabled = false;
+        }
+
+        function setupEventListeners() {
+            const startCameraBtn = document.getElementById('startCamera');
+            const setAnswerKeyBtn = document.getElementById('setAnswerKey');
+            const evaluateModeBtn = document.getElementById('evaluateMode');
+            const captureBtn = document.getElementById('captureBtn');
+
+            console.log('Buttons found:', {
+                startCamera: !!startCameraBtn,
+                setAnswerKey: !!setAnswerKeyBtn,
+                evaluateMode: !!evaluateModeBtn,
+                capture: !!captureBtn
+            });
+
+            startCameraBtn.addEventListener('click', async () => {
+                console.log('Start Camera button clicked');
+                const hasPermission = await checkCameraPermissions();
+                if (hasPermission) await startCamera();
+            });
+
+            setAnswerKeyBtn.addEventListener('click', () => {
+                console.log('Set Answer Key button clicked');
+                setMode(true);
+            });
+
+            evaluateModeBtn.addEventListener('click', () => {
+                console.log('Evaluate Mode button clicked');
+                setMode(false);
+            });
+
+            captureBtn.addEventListener('click', () => {
+                console.log('Capture button clicked');
+                captureAndProcess();
+            });
+
+            captureBtn.addEventListener('touchstart', (e) => {
+                console.log('Capture button touched');
+                e.preventDefault();
+                captureAndProcess();
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' && video.srcObject) {
+                    console.log('Space key pressed for capture');
+                    e.preventDefault();
+                    captureAndProcess();
+                }
+            });
+        }
+
+        async function checkCameraAvailability() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cameras = devices.filter(device => device.kind === 'videoinput');
+                console.log('Available cameras:', cameras.length);
+                if (cameras.length === 0) {
+                    showError('No cameras detected on this device.');
+                }
+            } catch (error) {
+                console.warn('Could not enumerate devices:', error);
+                showError('Unable to check camera availability.');
+            }
+        }
+
+        async function checkCameraPermissions() {
+            try {
+                if ('permissions' in navigator) {
+                    const permission = await navigator.permissions.query({ name: 'camera' });
+                    console.log('Camera permission status:', permission.state);
+                    if (permission.state === 'denied') {
+                        showError('Camera permission denied. Please enable in browser settings.');
+                        return false;
+                    }
+                }
+                return true;
+            } catch (error) {
+                console.warn('Could not check permissions:', error);
+                return true;
+            }
+        }
+
+        async function startCamera() {
+            try {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop
