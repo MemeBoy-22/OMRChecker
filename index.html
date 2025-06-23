@@ -138,8 +138,6 @@
             width: 100%;
             height: auto;
             display: block;
-            transform: rotate(-90deg);
-            transform-origin: top left;
         }
 
         canvas {
@@ -159,8 +157,6 @@
         .overlay svg {
             width: 100%;
             height: 100%;
-            transform: rotate(0deg);
-            transform-origin: center;
         }
 
         .alignment-guide {
@@ -522,30 +518,36 @@
                 const constraints = {
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: 720 },
-                        height: { ideal: 1280 }
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
                     }
                 };
 
                 console.log('Trying camera constraints:', constraints);
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                stream = await navigator.mediaDevices.getUserMedia(constraints).catch(err => {
+                    console.error('getUserMedia error:', err);
+                    throw err;
+                });
                 video.srcObject = stream;
 
                 await new Promise((resolve, reject) => {
                     video.onloadedmetadata = resolve;
-                    video.onerror = reject;
+                    video.onerror = () => reject(new Error('Video metadata load failed'));
                     setTimeout(() => reject(new Error('Video load timeout')), 5000);
                 });
 
-                await video.play();
+                await video.play().catch(err => {
+                    console.error('Video play error:', err);
+                    throw err;
+                });
 
-                // Swap width and height due to rotation
-                canvas.width = video.videoHeight;
-                canvas.height = video.videoWidth;
+                // Set canvas dimensions based on video feed
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
                 processCanvas.width = canvas.width;
                 processCanvas.height = canvas.height;
 
-                console.log('Video dimensions (after rotation):', canvas.width, 'x', canvas.height);
+                console.log('Video dimensions:', canvas.width, 'x', canvas.height);
 
                 const startBtn = document.getElementById('startCamera');
                 startBtn.textContent = 'Camera Active ✓';
@@ -562,6 +564,8 @@
                     message += 'No camera found.';
                 } else if (error.name === 'NotReadableError') {
                     message += 'Camera in use by another application.';
+                } else if (error.name === 'OverconstrainedError') {
+                    message += 'Requested video constraints not supported.';
                 } else {
                     message += error.message;
                 }
@@ -605,10 +609,10 @@
             showProcessing(true);
 
             try {
-                // Adjust for rotated video feed
+                // Rotate and draw video frame onto canvas
                 ctx.save();
                 ctx.translate(canvas.width / 2, canvas.height / 2);
-                ctx.rotate(Math.PI / 2);
+                ctx.rotate(Math.PI / 2); // 90 degrees counterclockwise
                 ctx.drawImage(video, -canvas.height / 2, -canvas.width / 2, canvas.height, canvas.width);
                 ctx.restore();
 
@@ -1032,9 +1036,10 @@
 
             function checkAlignment() {
                 if (!isAligned) {
+                    // Rotate and draw video frame onto canvas
                     ctx.save();
                     ctx.translate(canvas.width / 2, canvas.height / 2);
-                    ctx.rotate(Math.PI / 2);
+                    ctx.rotate(Math.PI / 2); // 90 degrees counterclockwise
                     ctx.drawImage(video, -canvas.height / 2, -canvas.width / 2, canvas.height, canvas.width);
                     ctx.restore();
 
