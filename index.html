@@ -447,6 +447,23 @@
         document.addEventListener('DOMContentLoaded', function() {
             initializeElements();
             setupEventListeners();
+            
+            // Auto-check camera availability on load
+            setTimeout(async () => {
+                try {
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const cameras = devices.filter(device => device.kind === 'videoinput');
+                    console.log('Available cameras:', cameras.length);
+                    
+                    if (cameras.length === 0) {
+                        showError('No cameras detected on this device.');
+                    } else {
+                        console.log('Camera devices found:', cameras.map(c => c.label || 'Unknown Camera'));
+                    }
+                } catch (error) {
+                    console.warn('Could not enumerate devices:', error);
+                }
+            }, 1000);
         });
 
         function initializeElements() {
@@ -458,43 +475,139 @@
         }
 
         function setupEventListeners() {
-            document.getElementById('startCamera').addEventListener('click', startCamera);
+            // Remove the old event listener setup for start camera since we added it separately above
             document.getElementById('setAnswerKey').addEventListener('click', () => setMode(true));
             document.getElementById('evaluateMode').addEventListener('click', () => setMode(false));
             document.getElementById('captureBtn').addEventListener('click', captureAndProcess);
             
             // Touch support for mobile
-            document.getElementById('captureBtn').addEventListener('touchstart', captureAndProcess);
+            document.getElementById('captureBtn').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                captureAndProcess();
+            });
+
+            // Add keyboard support
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' && video.srcObject) {
+                    e.preventDefault();
+                    captureAndProcess();
+                }
+            });
         }
 
         async function startCamera() {
             try {
+                // Stop existing stream if any
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
+                    stream = null;
                 }
 
-                const constraints = {
-                    video: {
-                        facingMode: 'environment', // Use back camera on mobile
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                };
+                // Check if getUserMedia is supported
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported in this browser');
+                }
 
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                // Try different constraint configurations
+                const constraintConfigs = [
+                    // Preferred: back camera with high resolution
+                    {
+                        video: {
+                            facingMode: { exact: 'environment' },
+                            width: { ideal: 1920, min: 640 },
+                            height: { ideal: 1080, min: 480 }
+                        }
+                    },
+                    // Fallback: back camera with lower resolution
+                    {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280, min: 640 },
+                            height: { ideal: 720, min: 480 }
+                        }
+                    },
+                    // Fallback: any camera
+                    {
+                        video: {
+                            width: { ideal: 1280, min: 640 },
+                            height: { ideal: 720, min: 480 }
+                        }
+                    },
+                    // Final fallback: basic video
+                    {
+                        video: true
+                    }
+                ];
+
+                let lastError = null;
+                
+                for (const constraints of constraintConfigs) {
+                    try {
+                        console.log('Trying camera constraints:', constraints);
+                        stream = await navigator.mediaDevices.getUserMedia(constraints);
+                        break;
+                    } catch (err) {
+                        console.warn('Camera constraint failed:', err);
+                        lastError = err;
+                        continue;
+                    }
+                }
+
+                if (!stream) {
+                    throw lastError || new Error('Could not access camera with any configuration');
+                }
+
                 video.srcObject = stream;
                 
-                video.addEventListener('loadedmetadata', () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    processCanvas.width = video.videoWidth;
-                    processCanvas.height = video.videoHeight;
+                // Wait for video to be ready
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = resolve;
+                    video.onerror = reject;
+                    setTimeout(() => reject(new Error('Video load timeout')), 10000);
                 });
 
-                document.getElementById('startCamera').textContent = 'Camera Active';
-                document.getElementById('startCamera').style.background = '#28a745';
+                await video.play();
+
+                // Set canvas dimensions after video is loaded
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                processCanvas.width = canvas.width;
+                processCanvas.height = canvas.height;
+
+                console.log('Video dimensions:', canvas.width, 'x', canvas.height);
+
+                // Update UI
+                const startBtn = document.getElementById('startCamera');
+                startBtn.textContent = 'Camera Active ✓';
+                startBtn.style.background = '#28a745';
+                startBtn.disabled = true;
+
+                // Show camera info
+                showSuccess(`Camera started successfully (${canvas.width}x${canvas.height})`);
+
             } catch (error) {
-                showError('Camera access failed: ' + error.message);
+                console.error('Camera error:', error);
+                let errorMessage = 'Camera access failed: ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Permission denied. Please allow camera access and try again.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'No camera found on this device.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage += 'Camera is being used by another application.';
+                } else if (error.name === 'OverconstrainedError') {
+                    errorMessage += 'Camera constraints not supported.';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                showError(errorMessage);
+                
+                // Reset button
+                const startBtn = document.getElementById('startCamera');
+                startBtn.textContent = 'Retry Camera';
+                startBtn.style.background = '#dc3545';
+                startBtn.disabled = false;
             }
         }
 
@@ -886,4 +999,53 @@
             }, 5000);
         }
 
-        function showSuccess(message
+        function showSuccess(message) {
+            // Remove existing messages
+            const existingMessages = document.querySelectorAll('.success-message, .error-message');
+            existingMessages.forEach(msg => msg.remove());
+            
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.style.cssText = `
+                background: #d4edda;
+                color: #155724;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 15px 0;
+                border: 1px solid #c3e6cb;
+            `;
+            successDiv.textContent = message;
+            
+            document.querySelector('.controls').appendChild(successDiv);
+            
+            setTimeout(() => {
+                successDiv.remove();
+            }, 5000);
+        }
+
+        // Add camera permission check
+        async function checkCameraPermissions() {
+            try {
+                if ('permissions' in navigator) {
+                    const permission = await navigator.permissions.query({ name: 'camera' });
+                    console.log('Camera permission status:', permission.state);
+                    
+                    if (permission.state === 'denied') {
+                        showError('Camera permission is denied. Please enable camera access in your browser settings.');
+                        return false;
+                    }
+                }
+                return true;
+            } catch (error) {
+                console.warn('Could not check camera permissions:', error);
+                return true; // Proceed anyway
+            }
+        }
+
+        // Update the start camera button handler
+        document.getElementById('startCamera').addEventListener('click', async () => {
+            const hasPermission = await checkCameraPermissions();
+            if (hasPermission) {
+                await startCamera();
+            }
+        });
