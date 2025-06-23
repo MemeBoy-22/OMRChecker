@@ -7,63 +7,157 @@
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
-      background: #f9f9f9;
+      background: #f4f4f4;
     }
     canvas {
       border: 1px solid #ccc;
       margin-top: 10px;
     }
     input, button {
-      margin-top: 15px;
+      margin-top: 10px;
+      display: block;
+    }
+    #result {
+      margin-top: 20px;
+      font-size: 18px;
     }
   </style>
 </head>
 <body>
   <h1>OMR Sheet Scanner</h1>
-
-  <input type="file" id="imageInput" accept="image/*" />
-  <br/>
+  <input type="file" id="imageInput" accept="image/*" multiple>
   <canvas id="canvas" width="800" height="600"></canvas>
-  <br/>
-  <button id="processBtn">Process OMR Sheet</button>
+  <button id="processBtn">Scan and Grade</button>
+  <div id="result"></div>
 
   <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
-    let imgElement = null;
     let canvas = document.getElementById("canvas");
     let ctx = canvas.getContext("2d");
     let input = document.getElementById("imageInput");
+    let resultDiv = document.getElementById("result");
+    let imageFiles = [];
+
+    let answerKey = ["B", "D", "A", "C", "B", "C", "D", "E", "A", "C", "B", "D", "E", "A", "C", "B", "A", "C", "B", "D"];
 
     input.addEventListener("change", function(e) {
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        imgElement = new Image();
-        imgElement.onload = function() {
-          canvas.width = imgElement.width;
-          canvas.height = imgElement.height;
-          ctx.drawImage(imgElement, 0, 0);
-        }
-        imgElement.src = event.target.result;
-      };
-      reader.readAsDataURL(e.target.files[0]);
+      imageFiles = Array.from(e.target.files);
     });
 
     function onOpenCvReady() {
       console.log("OpenCV.js is ready.");
     }
 
+    function detectRollNumber(gray, contours) {
+      const digits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+      let rollRectangles = contours.map(cnt => cv.boundingRect(cnt)).filter(r => r.width > 10 && r.height > 10);
+      rollRectangles.sort((a, b) => a.x - b.x || a.y - b.y);
+
+      let rollDigits = [];
+      for (let col = 0; col < 4; col++) {
+        let columnDigits = rollRectangles.filter(r => r.x > rollRectangles[0].x + col * 20 - 5 && r.x < rollRectangles[0].x + col * 20 + 15);
+        columnDigits.sort((a, b) => a.y - b.y);
+        for (let i = 0; i < columnDigits.length; i++) {
+          let roi = gray.roi(columnDigits[i]);
+          let mean = cv.mean(roi);
+          roi.delete();
+          if (mean[0] < 130) {
+            rollDigits.push(digits[i]);
+            break;
+          }
+        }
+      }
+      return rollDigits.join("");
+    }
+
+    function processImage(imageFile, callback) {
+      let reader = new FileReader();
+      reader.onload = function(event) {
+        let imgElement = new Image();
+        imgElement.onload = function() {
+          canvas.width = imgElement.width;
+          canvas.height = imgElement.height;
+          ctx.drawImage(imgElement, 0, 0);
+
+          let src = cv.imread(canvas);
+          let gray = new cv.Mat();
+          cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+          let blurred = new cv.Mat();
+          cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+          let thresh = new cv.Mat();
+          cv.adaptiveThreshold(blurred, thresh, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY_INV, 11, 2);
+
+          let contours = new cv.MatVector();
+          let hierarchy = new cv.Mat();
+          cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+          let bubbles = [], bubbleRects = [];
+          for (let i = 0; i < contours.size(); ++i) {
+            let cnt = contours.get(i);
+            let area = cv.contourArea(cnt);
+            let perimeter = cv.arcLength(cnt, true);
+            if (perimeter === 0) continue;
+            let circularity = 4 * Math.PI * (area / (perimeter * perimeter));
+            if (circularity > 0.7 && circularity < 1.2 && area > 100 && area < 500) {
+              let rect = cv.boundingRect(cnt);
+              bubbleRects.push(rect);
+              bubbles.push(cnt);
+            }
+          }
+
+          bubbleRects.sort((a, b) => a.y - b.y || a.x - b.x);
+          let studentAnswers = Array(20).fill("-");
+
+          for (let i = 0; i < bubbleRects.length; ++i) {
+            let qIndex = Math.floor(i / 5);
+            let optionIndex = i % 5;
+            let roi = gray.roi(bubbleRects[i]);
+            let mean = cv.mean(roi);
+            roi.delete();
+            if (mean[0] < 130) {
+              studentAnswers[qIndex] = ["A", "B", "C", "D", "E"][optionIndex];
+            }
+          }
+
+          let score = 0;
+          for (let i = 0; i < answerKey.length; i++) {
+            if (studentAnswers[i] === answerKey[i]) score++;
+          }
+
+          let rollNumber = detectRollNumber(gray, bubbleRects);
+
+          src.delete(); gray.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
+          callback({ rollNumber: rollNumber || "NA", score: score, answers: studentAnswers });
+        };
+        imgElement.src = event.target.result;
+      };
+      reader.readAsDataURL(imageFile);
+    }
+
     document.getElementById("processBtn").onclick = function() {
-      if (!imgElement) {
-        alert("Please upload an image first.");
+      if (imageFiles.length === 0) {
+        alert("Please upload at least one image.");
         return;
       }
+      let results = [];
+      let processed = 0;
+      resultDiv.innerHTML = "Processing...";
 
-      let src = cv.imread(canvas);
-      let dst = new cv.Mat();
-      cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
-      cv.imshow(canvas, dst);
-      src.delete(); dst.delete();
-      alert("Grayscale conversion done. Bubble detection will be added next.");
+      imageFiles.forEach(file => {
+        processImage(file, data => {
+          results.push(data);
+          processed++;
+          if (processed === imageFiles.length) {
+            let wb = XLSX.utils.book_new();
+            let ws = XLSX.utils.json_to_sheet(results);
+            XLSX.utils.book_append_sheet(wb, ws, "Grades");
+            XLSX.writeFile(wb, "omr_results.xlsx");
+
+            resultDiv.innerHTML = "Results saved to omr_results.xlsx";
+          }
+        });
+      });
     };
   </script>
 </body>
