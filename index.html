@@ -141,7 +141,7 @@
         }
 
         canvas {
-            display: none;
+            display: block; /* Changed to block for visual feedback */
         }
 
         .overlay {
@@ -416,6 +416,9 @@
         let answerKey = null;
         let stream = null;
         let isAligned = false;
+        let lastBoundaries = null;
+        let stableFrames = 0;
+        const STABILITY_THRESHOLD = 5; // Number of frames to confirm stability
 
         // OMR Sheet configuration
         const OMR_CONFIG = {
@@ -446,29 +449,24 @@
             processCtx = processCanvas.getContext('2d');
             overlaySvg = document.getElementById('overlaySvg');
 
-            // Ensure buttons are enabled
             document.getElementById('startCamera').disabled = false;
             document.getElementById('setAnswerKey').disabled = false;
             document.getElementById('evaluateMode').disabled = false;
         }
 
         function setupEventListeners() {
-            const startCameraBtn = document.getElementById('startCamera');
-            const setAnswerKeyBtn = document.getElementById('setAnswerKey');
-            const evaluateModeBtn = document.getElementById('evaluateMode');
-
-            startCameraBtn.addEventListener('click', async () => {
+            document.getElementById('startCamera').addEventListener('click', async () => {
                 console.log('Start Camera button clicked');
                 const hasPermission = await checkCameraPermissions();
                 if (hasPermission) await startCamera();
             });
 
-            setAnswerKeyBtn.addEventListener('click', () => {
+            document.getElementById('setAnswerKey').addEventListener('click', () => {
                 console.log('Set Answer Key button clicked');
                 setMode(true);
             });
 
-            evaluateModeBtn.addEventListener('click', () => {
+            document.getElementById('evaluateMode').addEventListener('click', () => {
                 console.log('Evaluate Mode button clicked');
                 setMode(false);
             });
@@ -479,9 +477,7 @@
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const cameras = devices.filter(device => device.kind === 'videoinput');
                 console.log('Available cameras:', cameras.length);
-                if (cameras.length === 0) {
-                    showError('No cameras detected on this device.');
-                }
+                if (cameras.length === 0) showError('No cameras detected on this device.');
             } catch (error) {
                 console.warn('Could not enumerate devices:', error);
                 showError('Unable to check camera availability.');
@@ -512,18 +508,7 @@
                     stream = null;
                 }
 
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Camera API not supported');
-                }
-
-                const constraints = {
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 720 },
-                        height: { ideal: 1280 }
-                    }
-                };
-
+                const constraints = { video: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } } };
                 console.log('Trying camera constraints:', constraints);
                 stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
@@ -541,45 +526,34 @@
                 processCanvas.width = canvas.width;
                 processCanvas.height = canvas.height;
 
-                // Adjust overlay for portrait mode
                 updateOverlay();
-
                 console.log('Video dimensions:', canvas.width, 'x', canvas.height);
 
-                const startBtn = document.getElementById('startCamera');
-                startBtn.textContent = 'Camera Active ✓';
-                startBtn.style.background = '#28a745';
-                startBtn.disabled = true;
-
+                document.getElementById('startCamera').textContent = 'Camera Active ✓';
+                document.getElementById('startCamera').style.background = '#28a745';
+                document.getElementById('startCamera').disabled = true;
                 showSuccess(`Camera started (${canvas.width}x${canvas.height})`);
             } catch (error) {
                 console.error('Camera error:', error);
                 let message = 'Camera access failed: ';
-                if (error.name === 'NotAllowedError') {
-                    message += 'Permission denied. Please allow camera access.';
-                } else if (error.name === 'NotFoundError') {
-                    message += 'No camera found.';
-                } else if (error.name === 'NotReadableError') {
-                    message += 'Camera in use by another application.';
-                } else {
-                    message += error.message;
-                }
+                if (error.name === 'NotAllowedError') message += 'Permission denied. Please allow camera access.';
+                else if (error.name === 'NotFoundError') message += 'No camera found.';
+                else if (error.name === 'NotReadableError') message += 'Camera in use by another application.';
+                else message += error.message;
                 showError(message);
-                const startBtn = document.getElementById('startCamera');
-                startBtn.textContent = 'Retry Camera';
-                startBtn.style.background = '#dc3545';
-                startBtn.disabled = false;
+                document.getElementById('startCamera').textContent = 'Retry Camera';
+                document.getElementById('startCamera').style.background = '#dc3545';
+                document.getElementById('startCamera').disabled = false;
             }
         }
 
         function updateOverlay() {
-            if (canvas.height > canvas.width) { // Portrait mode
+            if (canvas.height > canvas.width) {
                 const aspectRatio = canvas.width / canvas.height;
-                const templateWidth = 0.70 * canvas.height; // Original width based on height
-                const templateHeight = 0.80 * canvas.height; // Original height based on height
+                const templateWidth = 0.70 * canvas.height;
+                const templateHeight = 0.80 * canvas.height;
                 const scaledWidth = Math.min(templateWidth, canvas.width);
                 const scaledHeight = (scaledWidth / templateWidth) * templateHeight;
-
                 const xOffset = (canvas.width - scaledWidth) / 2;
                 const yOffset = (canvas.height - scaledHeight) / 2;
 
@@ -592,7 +566,7 @@
                     <line stroke="#00ff00" stroke-width="2" x1="${(xOffset + scaledWidth * 0.45) / canvas.width * 100}%" y1="${(yOffset + scaledHeight * 0.50) / canvas.height * 100}%" x2="${(xOffset + scaledWidth * 0.55) / canvas.width * 100}%" y2="${(yOffset + scaledHeight * 0.50) / canvas.height * 100}%" opacity="0.6"/>
                     <line stroke="#00ff00" stroke-width="2" x1="${(xOffset + scaledWidth * 0.50) / canvas.width * 100}%" y1="${(yOffset + scaledHeight * 0.45) / canvas.height * 100}%" x2="${(xOffset + scaledWidth * 0.50) / canvas.width * 100}%" y2="${(yOffset + scaledHeight * 0.55) / canvas.height * 100}%" opacity="0.6"/>
                 `;
-            } else { // Landscape mode
+            } else {
                 overlaySvg.innerHTML = `
                     <rect class="alignment-guide" x="15%" y="10%" width="70%" height="80%" rx="10"/>
                     <circle class="corner-marker" cx="15%" cy="10%" r="8"/>
@@ -609,7 +583,6 @@
             console.log('Setting mode to:', isAnswerKey ? 'Answer Key' : 'Evaluate');
             isAnswerKeyMode = isAnswerKey;
             const indicator = document.getElementById('modeIndicator');
-
             if (isAnswerKey) {
                 indicator.textContent = 'Answer Key Mode';
                 indicator.className = 'mode-indicator mode-answer-key';
@@ -635,12 +608,10 @@
             }
 
             showProcessing(true);
-
             try {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const results = await processOMRSheet(imageData);
-
                 if (results.success) {
                     if (isAnswerKeyMode) {
                         answerKey = results.answers;
@@ -658,7 +629,9 @@
                 showError('Processing failed: ' + error.message);
             } finally {
                 showProcessing(false);
-                isAligned = false; // Reset alignment after processing
+                isAligned = false;
+                stableFrames = 0;
+                lastBoundaries = null;
             }
         }
 
@@ -666,28 +639,14 @@
             try {
                 processCtx.putImageData(imageData, 0, 0);
                 let grayData = convertToGrayscale(imageData);
-
-                // Enhance contrast for better edge detection
                 grayData = enhanceContrast(grayData);
-
-                // Apply skew correction
-                grayData = await correctSkew(grayData);
-
-                // Update processCanvas with corrected image for debugging
-                const correctedImageData = new ImageData(grayData.data, grayData.width, grayData.height);
-                processCtx.putImageData(correctedImageData, 0, 0);
-
                 const boundaries = detectOMRBoundaries(grayData);
-
-                if (!boundaries) {
-                    return { success: false, error: 'Could not detect OMR sheet boundaries' };
-                }
+                if (!boundaries) return { success: false, error: 'Could not detect OMR sheet boundaries' };
 
                 const questionRegions = extractQuestionRegions(grayData, boundaries);
                 const idRegion = extractIdRegion(grayData, boundaries);
                 const answers = analyzeBubbles(questionRegions);
                 const studentId = analyzeIdBubbles(idRegion);
-
                 return { success: true, answers, studentId };
             } catch (error) {
                 return { success: false, error: error.message };
@@ -697,107 +656,26 @@
         function convertToGrayscale(imageData) {
             const data = imageData.data;
             const grayData = new Uint8ClampedArray(imageData.width * imageData.height);
-
             for (let i = 0; i < data.length; i += 4) {
                 const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
                 grayData[i / 4] = gray;
             }
-
             return { data: grayData, width: imageData.width, height: imageData.height };
         }
 
         function enhanceContrast(grayData) {
             const { data, width, height } = grayData;
             let min = 255, max = 0;
-
-            // Find min and max intensity
             for (let i = 0; i < data.length; i++) {
                 min = Math.min(min, data[i]);
                 max = Math.max(max, data[i]);
             }
-
+            const factor = 255 / (max - min + 1e-5);
             const contrastData = new Uint8ClampedArray(data.length);
-            const factor = 255 / (max - min);
-
             for (let i = 0; i < data.length; i++) {
-                contrastData[i] = Math.min(255, Math.max(0, (data[i] - min) * factor));
+                contrastData[i] = Math.min(255, Math.max(0, (data[i] - min) * factor * 1.5));
             }
-
             return { data: contrastData, width, height };
-        }
-
-        async function correctSkew(grayData) {
-            const { data, width, height } = grayData;
-            const edges = detectEdges(data, width, height);
-
-            // Perform Hough Transform to detect lines
-            const lines = houghTransform(edges, width, height);
-            if (!lines || lines.length === 0) {
-                console.warn('No lines detected for skew correction');
-                return grayData; // Return original if no lines found
-            }
-
-            // Find the dominant angle
-            let totalAngle = 0;
-            for (let line of lines) {
-                totalAngle += line.angle;
-            }
-            const averageAngle = totalAngle / lines.length;
-            const skewAngle = averageAngle * (180 / Math.PI); // Convert to degrees
-
-            console.log('Detected skew angle:', skewAngle);
-
-            // Rotate the image to correct skew
-            const rotatedData = new Uint8ClampedArray(data.length);
-            const centerX = width / 2;
-            const centerY = height / 2;
-            const cosA = Math.cos(-skewAngle * Math.PI / 180);
-            const sinA = Math.sin(-skewAngle * Math.PI / 180);
-
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const newX = Math.round((x - centerX) * cosA - (y - centerY) * sinA + centerX);
-                    const newY = Math.round((x - centerX) * sinA + (y - centerY) * cosA + centerY);
-
-                    if (newX >= 0 && newX < width && newY >= 0 && newY < height) {
-                        const origIdx = y * width + x;
-                        const newIdx = newY * width + newX;
-                        rotatedData[newIdx] = data[origIdx];
-                    }
-                }
-            }
-
-            return { data: rotatedData, width, height };
-        }
-
-        function houghTransform(edges, width, height) {
-            const thetaMax = 180;
-            const rhoMax = Math.sqrt(width * width + height * height);
-            const accumulator = new Array(thetaMax).fill(0).map(() => new Array(Math.round(rhoMax * 2)).fill(0));
-            const lines = [];
-
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    if (edges[y * width + x] > 0) {
-                        for (let theta = 0; theta < thetaMax; theta++) {
-                            const thetaRad = theta * Math.PI / 180;
-                            const rho = x * Math.cos(thetaRad) + y * Math.sin(thetaRad);
-                            accumulator[theta][Math.round(rho + rhoMax)]++;
-                        }
-                    }
-                }
-            }
-
-            // Find peaks in the accumulator
-            for (let theta = 0; theta < thetaMax; theta++) {
-                for (let rho = 0; rho < accumulator[theta].length; rho++) {
-                    if (accumulator[theta][rho] > 100) { // Threshold for line detection
-                        lines.push({ angle: theta * Math.PI / 180, rho: rho - rhoMax });
-                    }
-                }
-            }
-
-            return lines.length > 0 ? lines : null;
         }
 
         function detectOMRBoundaries(grayData) {
@@ -806,41 +684,21 @@
             let minX = width, maxX = 0, minY = height, maxY = 0;
             let edgeCount = 0;
 
-            // Enhanced edge filtering to focus on OMR sheet borders
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const idx = y * width + x;
                     if (edges[idx] > 0) {
-                        let isBorder = true;
-                        for (let dy = -1; dy <= 1; dy++) {
-                            for (let dx = -1; dx <= 1; dx++) {
-                                const newY = y + dy;
-                                const newX = x + dx;
-                                if (newY >= 0 && newY < height && newX >= 0 && newX < width) {
-                                    const newIdx = newY * width + newX;
-                                    if (edges[newIdx] === 0 && Math.abs(dy) + Math.abs(dx) === 1) {
-                                        isBorder = false;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (!isBorder) break;
-                        }
-                        if (isBorder) {
-                            minX = Math.min(minX, x);
-                            maxX = Math.max(maxX, x);
-                            minY = Math.min(minY, y);
-                            maxY = Math.max(maxY, y);
-                            edgeCount++;
-                        }
+                        minX = Math.min(minX, x);
+                        maxX = Math.max(maxX, x);
+                        minY = Math.min(minY, y);
+                        maxY = Math.max(maxY, y);
+                        edgeCount++;
                     }
                 }
             }
 
-            if (edgeCount < 100) return null;
-
-            // Ensure minimum size for OMR sheet
-            const minSize = Math.min(width, height) * 0.5;
+            if (edgeCount < 50) return null; // Lowered threshold for edge count
+            const minSize = Math.min(width, height) * 0.4;
             if (maxX - minX < minSize || maxY - minY < minSize) return null;
 
             return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
@@ -848,7 +706,7 @@
 
         function detectEdges(data, width, height) {
             const edges = new Uint8ClampedArray(width * height);
-            const threshold = 50;
+            const threshold = 30;
 
             for (let y = 1; y < height - 1; y++) {
                 for (let x = 1; x < width - 1; x++) {
@@ -860,6 +718,14 @@
                     const magnitude = Math.sqrt(gx * gx + gy * gy);
                     edges[idx] = magnitude > threshold ? 255 : 0;
                 }
+            }
+
+            // Adaptive thresholding
+            let mean = 0;
+            for (let i = 0; i < edges.length; i++) mean += edges[i];
+            mean /= edges.length;
+            for (let i = 0; i < edges.length; i++) {
+                edges[i] = edges[i] > mean * 0.5 ? 255 : 0;
             }
 
             return edges;
@@ -879,84 +745,52 @@
                 const rowIndex = i % 10;
                 const regionX = isLeftColumn ? leftColumnX : rightColumnX;
                 const regionY = startY + rowIndex * questionHeight;
-
-                regions.push({
-                    question: i + 1,
-                    x: Math.round(regionX),
-                    y: Math.round(regionY),
-                    width: Math.round(questionWidth),
-                    height: Math.round(questionHeight * 0.8)
-                });
+                regions.push({ question: i + 1, x: Math.round(regionX), y: Math.round(regionY), width: Math.round(questionWidth), height: Math.round(questionHeight * 0.8) });
             }
-
             return regions;
         }
 
         function extractIdRegion(grayData, boundaries) {
             const { x, y, width, height } = boundaries;
-            return {
-                x: Math.round(x + width * 0.75),
-                y: Math.round(y + height * 0.15),
-                width: Math.round(width * 0.2),
-                height: Math.round(height * 0.6)
-            };
+            return { x: Math.round(x + width * 0.75), y: Math.round(y + height * 0.15), width: Math.round(width * 0.2), height: Math.round(height * 0.6) };
         }
 
         function analyzeBubbles(questionRegions) {
             const answers = {};
             const imageData = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height).data;
-
             questionRegions.forEach(region => {
                 const bubbleWidth = region.width / OMR_CONFIG.optionsPerQuestion;
                 const bubbleStates = [];
-
                 for (let optionIndex = 0; optionIndex < OMR_CONFIG.optionsPerQuestion; optionIndex++) {
                     const bubbleX = region.x + optionIndex * bubbleWidth + bubbleWidth * 0.5;
                     const bubbleY = region.y + region.height * 0.5;
                     const darkness = calculateBubbleDarkness(imageData, processCanvas.width, bubbleX, bubbleY, bubbleWidth * 0.3);
-
-                    // Apply adaptive thresholding based on local average
                     const localThreshold = getLocalThreshold(imageData, processCanvas.width, bubbleX, bubbleY, bubbleWidth * 0.3);
                     const isMarked = darkness > localThreshold;
-
                     bubbleStates.push({ option: OMR_CONFIG.options[optionIndex], darkness, isMarked });
                 }
-
-                // Sort by darkness and select the most marked bubble
                 bubbleStates.sort((a, b) => b.darkness - a.darkness);
-                if (bubbleStates[0].isMarked && bubbleStates[0].darkness > 0.2) { // Adjusted threshold
-                    answers[region.question] = bubbleStates[0].option;
-                } else {
-                    answers[region.question] = null; // No clear mark
-                }
+                if (bubbleStates[0].isMarked && bubbleStates[0].darkness > 0.15) answers[region.question] = bubbleStates[0].option;
+                else answers[region.question] = null;
             });
-
             return answers;
         }
 
         function getLocalThreshold(imageData, width, centerX, centerY, radius) {
-            let totalGray = 0;
-            let pixelCount = 0;
-            const x = Math.round(centerX);
-            const y = Math.round(centerY);
-            const r = Math.round(radius);
-
-            for (let dy = -r; dy <= r; dy++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    if (dx * dx + dy * dy <= r * r) {
-                        const pixelX = x + dx;
-                        const pixelY = y + dy;
-                        if (pixelX >= 0 && pixelX < width && pixelY >= 0 && pixelY < processCanvas.height) {
-                            const pixelIndex = (pixelY * width + pixelX) * 4;
-                            const gray = (imageData[pixelIndex] + imageData[pixelIndex + 1] + imageData[pixelIndex + 2]) / 3;
-                            totalGray += gray;
-                            pixelCount++;
-                        }
+            let totalGray = 0, pixelCount = 0;
+            const x = Math.round(centerX), y = Math.round(centerY), r = Math.round(radius);
+            for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+                if (dx * dx + dy * dy <= r * r) {
+                    const pixelX = x + dx, pixelY = y + dy;
+                    if (pixelX >= 0 && pixelX < width && pixelY >= 0 && pixelY < processCanvas.height) {
+                        const pixelIndex = (pixelY * width + pixelX) * 4;
+                        const gray = (imageData[pixelIndex] + imageData[pixelIndex + 1] + imageData[pixelIndex + 2]) / 3;
+                        totalGray += gray;
+                        pixelCount++;
                     }
                 }
             }
-
-            return totalGray / pixelCount * 0.7; // 70% of local average as threshold
+            return totalGray / pixelCount * 0.7;
         }
 
         function analyzeIdBubbles(idRegion) {
@@ -964,49 +798,36 @@
             const studentId = [];
             const digitWidth = idRegion.width / OMR_CONFIG.idDigits;
             const digitHeight = idRegion.height / 10;
-
             for (let digitPos = 0; digitPos < OMR_CONFIG.idDigits; digitPos++) {
                 const digitX = idRegion.x + digitPos * digitWidth;
-                let maxDarkness = 0;
-                let selectedDigit = '0';
-
+                let maxDarkness = 0, selectedDigit = '0';
                 for (let digit = 0; digit < 10; digit++) {
                     const bubbleY = idRegion.y + digit * digitHeight + digitHeight * 0.5;
                     const darkness = calculateBubbleDarkness(imageData, processCanvas.width, digitX, bubbleY, digitWidth * 0.2);
-                    if (darkness > maxDarkness && darkness > 0.3) {
+                    if (darkness > maxDarkness && darkness > 0.25) {
                         maxDarkness = darkness;
                         selectedDigit = digit.toString();
                     }
                 }
-
                 studentId.push(selectedDigit);
             }
-
             return studentId.join('');
         }
 
         function calculateBubbleDarkness(imageData, width, centerX, centerY, radius) {
-            let totalPixels = 0;
-            let darkPixels = 0;
-            const x = Math.round(centerX);
-            const y = Math.round(centerY);
-            const r = Math.round(radius);
-
-            for (let dy = -r; dy <= r; dy++) {
-                for (let dx = -r; dx <= r; dx++) {
-                    if (dx * dx + dy * dy <= r * r) {
-                        const pixelX = x + dx;
-                        const pixelY = y + dy;
-                        if (pixelX >= 0 && pixelX < width && pixelY >= 0 && pixelY < processCanvas.height) {
-                            const pixelIndex = (pixelY * width + pixelX) * 4;
-                            const gray = (imageData[pixelIndex] + imageData[pixelIndex + 1] + imageData[pixelIndex + 2]) / 3;
-                            totalPixels++;
-                            if (gray < 128) darkPixels++;
-                        }
+            let totalPixels = 0, darkPixels = 0;
+            const x = Math.round(centerX), y = Math.round(centerY), r = Math.round(radius);
+            for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+                if (dx * dx + dy * dy <= r * r) {
+                    const pixelX = x + dx, pixelY = y + dy;
+                    if (pixelX >= 0 && pixelX < width && pixelY >= 0 && pixelY < processCanvas.height) {
+                        const pixelIndex = (pixelY * width + pixelX) * 4;
+                        const gray = (imageData[pixelIndex] + imageData[pixelIndex + 1] + imageData[pixelIndex + 2]) / 3;
+                        totalPixels++;
+                        if (gray < 128) darkPixels++;
                     }
                 }
             }
-
             return totalPixels > 0 ? darkPixels / totalPixels : 0;
         }
 
@@ -1014,12 +835,10 @@
             const display = document.getElementById('answerKeyDisplay');
             const answerSection = document.getElementById('answerKeySection');
             let html = '<strong>Answer Key Set:</strong><br>';
-
             for (let i = 1; i <= OMR_CONFIG.questions; i++) {
                 html += `Q${i}: ${answers[i] || 'No Answer'} `;
                 if (i % 5 === 0) html += '<br>';
             }
-
             display.innerHTML = html;
             answerSection.style.display = 'block';
         }
@@ -1029,36 +848,17 @@
             const studentIdEl = document.getElementById('studentId');
             const scoreNumberEl = document.getElementById('scoreNumber');
             const answerGridEl = document.getElementById('answerGrid');
-
-            let correctCount = 0;
-            let html = '';
-
+            let correctCount = 0, html = '';
             for (let i = 1; i <= OMR_CONFIG.questions; i++) {
-                const studentAnswer = studentAnswers[i];
-                const correctAnswer = answerKey[i];
-                let className = 'answer-neutral';
-                let status = 'No Answer';
-
+                const studentAnswer = studentAnswers[i], correctAnswer = answerKey[i];
+                let className = 'answer-neutral', status = 'No Answer';
                 if (studentAnswer && correctAnswer) {
-                    if (studentAnswer === correctAnswer) {
-                        correctCount++;
-                        className = 'answer-correct';
-                        status = '✓';
-                    } else {
-                        className = 'answer-wrong';
-                        status = `✗ (${correctAnswer})`;
-                    }
-                } else if (studentAnswer) {
-                    className = 'answer-wrong';
-                    status = `✗ (${correctAnswer || 'N/A'})`;
-                } else if (correctAnswer) {
-                    className = 'answer-wrong';
-                    status = `✗ (${correctAnswer})`;
-                }
-
+                    if (studentAnswer === correctAnswer) { correctCount++; className = 'answer-correct'; status = '✓'; }
+                    else { className = 'answer-wrong'; status = `✗ (${correctAnswer})`; }
+                } else if (studentAnswer) { className = 'answer-wrong'; status = `✗ (${correctAnswer || 'N/A'})`; }
+                else if (correctAnswer) { className = 'answer-wrong'; status = `✗ (${correctAnswer})`; }
                 html += `<div class="answer-item ${className}">Q${i}: ${studentAnswer || '--'} ${status}</div>`;
             }
-
             studentIdEl.textContent = `Student ID: ${studentId}`;
             scoreNumberEl.textContent = correctCount;
             answerGridEl.innerHTML = html;
@@ -1073,24 +873,20 @@
         function showError(message) {
             const existing = document.querySelectorAll('.error-message, .success-message');
             existing.forEach(el => el.remove());
-
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error-message';
             errorDiv.textContent = message;
             document.querySelector('.controls').appendChild(errorDiv);
-
             setTimeout(() => errorDiv.remove(), 5000);
         }
 
         function showSuccess(message) {
             const existing = document.querySelectorAll('.error-message, .success-message');
             existing.forEach(el => el.remove());
-
             const successDiv = document.createElement('div');
             successDiv.className = 'success-message';
             successDiv.textContent = message;
             document.querySelector('.controls').appendChild(successDiv);
-
             setTimeout(() => successDiv.remove(), 5000);
         }
 
@@ -1108,28 +904,44 @@
                         console.log('Detected boundaries:', boundaries);
                         const guide = getGuideDimensions();
                         console.log('Guide dimensions:', guide);
-                        const tolerance = Math.min(guide.width, guide.height) * 0.1; // Dynamic tolerance (10% of smaller dimension)
 
-                        const dx = Math.abs(boundaries.x - guide.x);
-                        const dy = Math.abs(boundaries.y - guide.y);
-                        const dWidth = Math.abs(boundaries.width - guide.width);
-                        const dHeight = Math.abs(boundaries.height - guide.height);
-
-                        console.log('Alignment differences:', { dx, dy, dWidth, dHeight, tolerance });
-
-                        // Draw detected boundaries for visual feedback
+                        // Draw detected boundaries
                         ctx.strokeStyle = 'red';
                         ctx.lineWidth = 2;
                         ctx.strokeRect(boundaries.x, boundaries.y, boundaries.width, boundaries.height);
 
-                        // Check alignment with dynamic tolerance
-                        if (dx < tolerance && dy < tolerance && dWidth < tolerance && dHeight < tolerance) {
-                            console.log('Alignment achieved, capturing...');
-                            isAligned = true;
-                            captureAndProcess();
+                        // Check alignment using ratio
+                        const widthRatio = boundaries.width / guide.width;
+                        const heightRatio = boundaries.height / guide.height;
+                        const xRatio = boundaries.x / guide.x;
+                        const yRatio = boundaries.y / guide.y;
+                        const tolerance = 0.2; // 20% tolerance
+
+                        console.log('Alignment ratios:', { widthRatio, heightRatio, xRatio, yRatio, tolerance });
+
+                        if (Math.abs(widthRatio - 1) < tolerance && Math.abs(heightRatio - 1) < tolerance &&
+                            Math.abs(xRatio - 1) < tolerance && Math.abs(yRatio - 1) < tolerance) {
+                            if (!lastBoundaries || (lastBoundaries.x === boundaries.x && lastBoundaries.y === boundaries.y &&
+                                lastBoundaries.width === boundaries.width && lastBoundaries.height === boundaries.height)) {
+                                stableFrames++;
+                                console.log('Stable frames:', stableFrames);
+                                if (stableFrames >= STABILITY_THRESHOLD) {
+                                    console.log('Alignment stable, capturing...');
+                                    isAligned = true;
+                                    captureAndProcess();
+                                }
+                            } else {
+                                stableFrames = 0;
+                            }
+                            lastBoundaries = { ...boundaries };
+                        } else {
+                            stableFrames = 0;
+                            lastBoundaries = null;
                         }
                     } else {
                         console.log('No boundaries detected');
+                        stableFrames = 0;
+                        lastBoundaries = null;
                     }
                 }
                 requestAnimationFrame(checkAlignment);
@@ -1139,29 +951,17 @@
         }
 
         function getGuideDimensions() {
-            if (canvas.height > canvas.width) { // Portrait mode
+            if (canvas.height > canvas.width) {
                 const aspectRatio = canvas.width / canvas.height;
-                const templateWidth = 0.70 * canvas.height; // Original width based on height
-                const templateHeight = 0.80 * canvas.height; // Original height based on height
+                const templateWidth = 0.70 * canvas.height;
+                const templateHeight = 0.80 * canvas.height;
                 const scaledWidth = Math.min(templateWidth, canvas.width);
                 const scaledHeight = (scaledWidth / templateWidth) * templateHeight;
-
                 const xOffset = (canvas.width - scaledWidth) / 2;
                 const yOffset = (canvas.height - scaledHeight) / 2;
-
-                return {
-                    x: xOffset,
-                    y: yOffset,
-                    width: scaledWidth,
-                    height: scaledHeight
-                };
-            } else { // Landscape mode
-                return {
-                    x: canvas.width * 0.15,
-                    y: canvas.height * 0.10,
-                    width: canvas.width * 0.70,
-                    height: canvas.height * 0.80
-                };
+                return { x: xOffset, y: yOffset, width: scaledWidth, height: scaledHeight };
+            } else {
+                return { x: canvas.width * 0.15, y: canvas.height * 0.10, width: canvas.width * 0.70, height: canvas.height * 0.80 };
             }
         }
     </script>
