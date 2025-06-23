@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OMR Sheet Scanner</title>
+    <title>OMR Sheet Scanner & Evaluator</title>
     <style>
         * {
             margin: 0;
@@ -685,16 +685,23 @@
         async function processOMRSheet(imageData) {
             try {
                 processCtx.putImageData(imageData, 0, 0);
-                const grayData = convertToGrayscale(imageData);
-                const correctedData = await correctSkew(grayData);
-                const boundaries = detectOMRBoundaries(correctedData);
+                let grayData = convertToGrayscale(imageData);
+
+                // Apply skew correction
+                grayData = await correctSkew(grayData);
+
+                // Update processCanvas with corrected image for debugging
+                const correctedImageData = new ImageData(grayData.data, grayData.width, grayData.height);
+                processCtx.putImageData(correctedImageData, 0, 0);
+
+                const boundaries = detectOMRBoundaries(grayData);
 
                 if (!boundaries) {
                     return { success: false, error: 'Could not detect OMR sheet boundaries' };
                 }
 
-                const questionRegions = extractQuestionRegions(correctedData, boundaries);
-                const idRegion = extractIdRegion(correctedData, boundaries);
+                const questionRegions = extractQuestionRegions(grayData, boundaries);
+                const idRegion = extractIdRegion(grayData, boundaries);
                 const answers = analyzeBubbles(questionRegions);
                 const studentId = analyzeIdBubbles(idRegion);
 
@@ -717,7 +724,77 @@
         }
 
         async function correctSkew(grayData) {
-            return grayData; // Simplified for demo
+            const { data, width, height } = grayData;
+            const edges = detectEdges(data, width, height);
+
+            // Perform Hough Transform to detect lines
+            const lines = houghTransform(edges, width, height);
+            if (!lines || lines.length === 0) {
+                console.warn('No lines detected for skew correction');
+                return grayData; // Return original if no lines found
+            }
+
+            // Find the dominant angle
+            let totalAngle = 0;
+            for (let line of lines) {
+                totalAngle += line.angle;
+            }
+            const averageAngle = totalAngle / lines.length;
+            const skewAngle = averageAngle * (180 / Math.PI); // Convert to degrees
+
+            console.log('Detected skew angle:', skewAngle);
+
+            // Rotate the image to correct skew
+            const rotatedData = new Uint8ClampedArray(data.length);
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const cosA = Math.cos(-skewAngle * Math.PI / 180);
+            const sinA = Math.sin(-skewAngle * Math.PI / 180);
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const newX = Math.round((x - centerX) * cosA - (y - centerY) * sinA + centerX);
+                    const newY = Math.round((x - centerX) * sinA + (y - centerY) * cosA + centerY);
+
+                    if (newX >= 0 && newX < width && newY >= 0 && newY < height) {
+                        const origIdx = y * width + x;
+                        const newIdx = newY * width + newX;
+                        rotatedData[newIdx] = data[origIdx];
+                    }
+                }
+            }
+
+            return { data: rotatedData, width, height };
+        }
+
+        function houghTransform(edges, width, height) {
+            const thetaMax = 180;
+            const rhoMax = Math.sqrt(width * width + height * height);
+            const accumulator = new Array(thetaMax).fill(0).map(() => new Array(Math.round(rhoMax * 2)).fill(0));
+            const lines = [];
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    if (edges[y * width + x] > 0) {
+                        for (let theta = 0; theta < thetaMax; theta++) {
+                            const thetaRad = theta * Math.PI / 180;
+                            const rho = x * Math.cos(thetaRad) + y * Math.sin(thetaRad);
+                            accumulator[theta][Math.round(rho + rhoMax)]++;
+                        }
+                    }
+                }
+            }
+
+            // Find peaks in the accumulator
+            for (let theta = 0; theta < thetaMax; theta++) {
+                for (let rho = 0; rho < accumulator[theta].length; rho++) {
+                    if (accumulator[theta][rho] > 100) { // Threshold for line detection
+                        lines.push({ angle: theta * Math.PI / 180, rho: rho - rhoMax });
+                    }
+                }
+            }
+
+            return lines.length > 0 ? lines : null;
         }
 
         function detectOMRBoundaries(grayData) {
@@ -816,20 +893,49 @@
                     const bubbleX = region.x + optionIndex * bubbleWidth + bubbleWidth * 0.5;
                     const bubbleY = region.y + region.height * 0.5;
                     const darkness = calculateBubbleDarkness(imageData, processCanvas.width, bubbleX, bubbleY, bubbleWidth * 0.3);
-                    bubbleStates.push({ option: OMR_CONFIG.options[optionIndex], darkness });
+
+                    // Apply adaptive thresholding based on local average
+                    const localThreshold = getLocalThreshold(imageData, processCanvas.width, bubbleX, bubbleY, bubbleWidth * 0.3);
+                    const isMarked = darkness > localThreshold;
+
+                    bubbleStates.push({ option: OMR_CONFIG.options[optionIndex], darkness, isMarked });
                 }
 
+                // Sort by darkness and select the most marked bubble
                 bubbleStates.sort((a, b) => b.darkness - a.darkness);
-                const threshold = 0.3;
-
-                if (bubbleStates[0].darkness > threshold) {
+                if (bubbleStates[0].isMarked && bubbleStates[0].darkness > 0.2) { // Adjusted threshold
                     answers[region.question] = bubbleStates[0].option;
                 } else {
-                    answers[region.question] = null;
+                    answers[region.question] = null; // No clear mark
                 }
             });
 
             return answers;
+        }
+
+        function getLocalThreshold(imageData, width, centerX, centerY, radius) {
+            let totalGray = 0;
+            let pixelCount = 0;
+            const x = Math.round(centerX);
+            const y = Math.round(centerY);
+            const r = Math.round(radius);
+
+            for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    if (dx * dx + dy * dy <= r * r) {
+                        const pixelX = x + dx;
+                        const pixelY = y + dy;
+                        if (pixelX >= 0 && pixelX < width && pixelY >= 0 && pixelY < processCanvas.height) {
+                            const pixelIndex = (pixelY * width + pixelX) * 4;
+                            const gray = (imageData[pixelIndex] + imageData[pixelIndex + 1] + imageData[pixelIndex + 2]) / 3;
+                            totalGray += gray;
+                            pixelCount++;
+                        }
+                    }
+                }
+            }
+
+            return totalGray / pixelCount * 0.7; // 70% of local average as threshold
         }
 
         function analyzeIdBubbles(idRegion) {
