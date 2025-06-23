@@ -157,6 +157,8 @@
         .overlay svg {
             width: 100%;
             height: 100%;
+            transform: rotate(-90deg);
+            transform-origin: center;
         }
 
         .alignment-guide {
@@ -170,37 +172,6 @@
         .corner-marker {
             fill: #ff0000;
             opacity: 0.7;
-        }
-
-        .capture-button {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            background: #fff;
-            border: 4px solid #007bff;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            z-index: 20;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .capture-button:hover {
-            transform: translateX(-50%) scale(1.1);
-            box-shadow: 0 4px 20px rgba(0,123,255,0.4);
-        }
-
-        .capture-button::after {
-            content: '';
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: #007bff;
         }
 
         .results-section {
@@ -384,16 +355,15 @@
                     <video id="video" autoplay playsinline></video>
                     <div class="overlay">
                         <svg>
-                            <rect class="alignment-guide" x="10%" y="15%" width="80%" height="70%" rx="10"/>
-                            <circle class="corner-marker" cx="10%" cy="15%" r="8"/>
-                            <circle class="corner-marker" cx="90%" cy="15%" r="8"/>
-                            <circle class="corner-marker" cx="90%" cy="85%" r="8"/>
-                            <circle class="corner-marker" cx="10%" cy="85%" r="8"/>
-                            <line stroke="#00ff00" stroke-width="2" x1="50%" y1="45%" x2="50%" y2="55%" opacity="0.6"/>
+                            <rect class="alignment-guide" x="15%" y="10%" width="70%" height="80%" rx="10" transform="rotate(-90 50% 50%)"/>
+                            <circle class="corner-marker" cx="15%" cy="10%" r="8"/>
+                            <circle class="corner-marker" cx="85%" cy="10%" r="8"/>
+                            <circle class="corner-marker" cx="85%" cy="90%" r="8"/>
+                            <circle class="corner-marker" cx="15%" cy="90%" r="8"/>
                             <line stroke="#00ff00" stroke-width="2" x1="45%" y1="50%" x2="55%" y2="50%" opacity="0.6"/>
+                            <line stroke="#00ff00" stroke-width="2" x1="50%" y1="45%" x2="50%" y2="55%" opacity="0.6"/>
                         </svg>
                     </div>
-                    <div class="capture-button" id="captureBtn"></div>
                 </div>
                 <canvas id="canvas"></canvas>
                 <canvas id="processCanvas"></canvas>
@@ -422,7 +392,7 @@
                         <li>Switch to "Evaluate Mode" to scan student answer sheets</li>
                         <li>Align the OMR sheet within the green guide rectangle</li>
                         <li>Ensure all corners are visible and the sheet is well-lit</li>
-                        <li>Click the capture button or tap the screen to scan</li>
+                        <li>The camera will automatically capture when aligned</li>
                     </ol>
                 </div>
             </div>
@@ -447,6 +417,7 @@
         let isAnswerKeyMode = true;
         let answerKey = null;
         let stream = null;
+        let isAligned = false;
 
         // OMR Sheet configuration
         const OMR_CONFIG = {
@@ -462,6 +433,7 @@
                 initializeElements();
                 setupEventListeners();
                 checkCameraAvailability();
+                startAlignmentCheck();
             } catch (error) {
                 console.error('Initialization failed:', error);
                 showError('Application failed to load. Check console for details.');
@@ -479,21 +451,12 @@
             document.getElementById('startCamera').disabled = false;
             document.getElementById('setAnswerKey').disabled = false;
             document.getElementById('evaluateMode').disabled = false;
-            document.getElementById('captureBtn').disabled = false;
         }
 
         function setupEventListeners() {
             const startCameraBtn = document.getElementById('startCamera');
             const setAnswerKeyBtn = document.getElementById('setAnswerKey');
             const evaluateModeBtn = document.getElementById('evaluateMode');
-            const captureBtn = document.getElementById('captureBtn');
-
-            console.log('Buttons found:', {
-                startCamera: !!startCameraBtn,
-                setAnswerKey: !!setAnswerKeyBtn,
-                evaluateMode: !!evaluateModeBtn,
-                capture: !!captureBtn
-            });
 
             startCameraBtn.addEventListener('click', async () => {
                 console.log('Start Camera button clicked');
@@ -509,25 +472,6 @@
             evaluateModeBtn.addEventListener('click', () => {
                 console.log('Evaluate Mode button clicked');
                 setMode(false);
-            });
-
-            captureBtn.addEventListener('click', () => {
-                console.log('Capture button clicked');
-                captureAndProcess();
-            });
-
-            captureBtn.addEventListener('touchstart', (e) => {
-                console.log('Capture button touched');
-                e.preventDefault();
-                captureAndProcess();
-            });
-
-            document.addEventListener('keydown', (e) => {
-                if (e.code === 'Space' && video.srcObject) {
-                    console.log('Space key pressed for capture');
-                    e.preventDefault();
-                    captureAndProcess();
-                }
             });
         }
 
@@ -593,8 +537,8 @@
 
                 await video.play();
 
-                canvas.width = video.videoWidth || 640;
-                canvas.height = video.videoHeight || 480;
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
                 processCanvas.width = canvas.width;
                 processCanvas.height = canvas.height;
 
@@ -679,6 +623,7 @@
                 showError('Processing failed: ' + error.message);
             } finally {
                 showProcessing(false);
+                isAligned = false; // Reset alignment after processing
             }
         }
 
@@ -847,24 +792,24 @@
         function extractQuestionRegions(grayData, boundaries) {
             const regions = [];
             const { x, y, width, height } = boundaries;
-            const leftColumnX = x + width * 0.05;
-            const rightColumnX = x + width * 0.35;
-            const startY = y + height * 0.15;
-            const questionHeight = height * 0.035;
-            const questionWidth = width * 0.25;
+            const topColumnY = y + height * 0.05;
+            const bottomColumnY = y + height * 0.35;
+            const startX = x + width * 0.15;
+            const questionWidth = width * 0.035;
+            const questionHeight = height * 0.25;
 
             for (let i = 0; i < 20; i++) {
-                const isLeftColumn = i < 10;
-                const rowIndex = i % 10;
-                const regionX = isLeftColumn ? leftColumnX : rightColumnX;
-                const regionY = startY + rowIndex * questionHeight;
+                const isTopColumn = i < 10;
+                const colIndex = i % 10;
+                const regionY = isTopColumn ? topColumnY : bottomColumnY;
+                const regionX = startX + colIndex * questionWidth;
 
                 regions.push({
                     question: i + 1,
                     x: Math.round(regionX),
                     y: Math.round(regionY),
-                    width: Math.round(questionWidth),
-                    height: Math.round(questionHeight * 0.8)
+                    width: Math.round(questionWidth * 0.8),
+                    height: Math.round(questionHeight)
                 });
             }
 
@@ -874,10 +819,10 @@
         function extractIdRegion(grayData, boundaries) {
             const { x, y, width, height } = boundaries;
             return {
-                x: Math.round(x + width * 0.75),
-                y: Math.round(y + height * 0.15),
-                width: Math.round(width * 0.2),
-                height: Math.round(height * 0.6)
+                x: Math.round(x + width * 0.15),
+                y: Math.round(y + height * 0.75),
+                width: Math.round(width * 0.6),
+                height: Math.round(height * 0.2)
             };
         }
 
@@ -886,16 +831,16 @@
             const imageData = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height).data;
 
             questionRegions.forEach(region => {
-                const bubbleWidth = region.width / OMR_CONFIG.optionsPerQuestion;
+                const bubbleHeight = region.height / OMR_CONFIG.optionsPerQuestion;
                 const bubbleStates = [];
 
                 for (let optionIndex = 0; optionIndex < OMR_CONFIG.optionsPerQuestion; optionIndex++) {
-                    const bubbleX = region.x + optionIndex * bubbleWidth + bubbleWidth * 0.5;
-                    const bubbleY = region.y + region.height * 0.5;
-                    const darkness = calculateBubbleDarkness(imageData, processCanvas.width, bubbleX, bubbleY, bubbleWidth * 0.3);
+                    const bubbleX = region.x + region.width * 0.5;
+                    const bubbleY = region.y + optionIndex * bubbleHeight + bubbleHeight * 0.5;
+                    const darkness = calculateBubbleDarkness(imageData, processCanvas.width, bubbleX, bubbleY, bubbleHeight * 0.3);
 
                     // Apply adaptive thresholding based on local average
-                    const localThreshold = getLocalThreshold(imageData, processCanvas.width, bubbleX, bubbleY, bubbleWidth * 0.3);
+                    const localThreshold = getLocalThreshold(imageData, processCanvas.width, bubbleX, bubbleY, bubbleHeight * 0.3);
                     const isMarked = darkness > localThreshold;
 
                     bubbleStates.push({ option: OMR_CONFIG.options[optionIndex], darkness, isMarked });
@@ -941,17 +886,17 @@
         function analyzeIdBubbles(idRegion) {
             const imageData = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height).data;
             const studentId = [];
-            const digitWidth = idRegion.width / OMR_CONFIG.idDigits;
-            const digitHeight = idRegion.height / 10;
+            const digitHeight = idRegion.height / OMR_CONFIG.idDigits;
+            const digitWidth = idRegion.width / 10;
 
             for (let digitPos = 0; digitPos < OMR_CONFIG.idDigits; digitPos++) {
-                const digitX = idRegion.x + digitPos * digitWidth;
+                const digitY = idRegion.y + digitPos * digitHeight;
                 let maxDarkness = 0;
                 let selectedDigit = '0';
 
                 for (let digit = 0; digit < 10; digit++) {
-                    const bubbleY = idRegion.y + digit * digitHeight + digitHeight * 0.5;
-                    const darkness = calculateBubbleDarkness(imageData, processCanvas.width, digitX, bubbleY, digitWidth * 0.2);
+                    const bubbleX = idRegion.x + digit * digitWidth + digitWidth * 0.5;
+                    const darkness = calculateBubbleDarkness(imageData, processCanvas.width, bubbleX, digitY, digitWidth * 0.2);
                     if (darkness > maxDarkness && darkness > 0.3) {
                         maxDarkness = darkness;
                         selectedDigit = digit.toString();
@@ -1071,6 +1016,40 @@
             document.querySelector('.controls').appendChild(successDiv);
 
             setTimeout(() => successDiv.remove(), 5000);
+        }
+
+        function startAlignmentCheck() {
+            if (!video.srcObject) return;
+
+            function checkAlignment() {
+                if (!isAligned) {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const grayData = convertToGrayscale(imageData);
+                    const boundaries = detectOMRBoundaries(grayData);
+
+                    if (boundaries) {
+                        const { x, y, width, height } = boundaries;
+                        const guideX = canvas.width * 0.15;
+                        const guideY = canvas.height * 0.10;
+                        const guideWidth = canvas.width * 0.70;
+                        const guideHeight = canvas.height * 0.80;
+
+                        const dx = Math.abs(x - guideX);
+                        const dy = Math.abs(y - guideY);
+                        const dWidth = Math.abs(width - guideWidth);
+                        const dHeight = Math.abs(height - guideHeight);
+
+                        if (dx < 50 && dy < 50 && dWidth < 50 && dHeight < 50) {
+                            isAligned = true;
+                            captureAndProcess();
+                        }
+                    }
+                }
+                requestAnimationFrame(checkAlignment);
+            }
+
+            checkAlignment();
         }
     </script>
 </body>
