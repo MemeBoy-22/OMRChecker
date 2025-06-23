@@ -1,3 +1,4 @@
+/* Main Styles */
 body {
   font-family: Arial, sans-serif;
   margin: 0;
@@ -17,118 +18,40 @@ body {
 h1 {
   text-align: center;
   color: #2c3e50;
+  margin-bottom: 20px;
 }
 
+h2 {
+  color: #2c3e50;
+  margin-top: 0;
+}
+
+/* Scanner Section */
 .scanner-section {
   position: relative;
   width: 100%;
-  aspect-ratio: 8.5/11;
+  aspect-ratio: 8.5/11; /* Standard paper ratio */
   margin: 20px 0;
   background: #000;
   overflow: hidden;
+  border-radius: 4px;
 }
 
 #cameraView {
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
+#cameraView video {
   width: 100%;
   height: 100%;
-  pointer-events: none;
-  border: 2px dashed rgba(0, 255, 0, 0.7);
+  object-fit: cover;
 }
 
-.controls {
-  display: flex;
-  gap: 10px;
-  margin: 20px 0;
-}
-
-.btn {
-  flex: 1;
-  padding: 12px;
-  border: none;
-  border-radius: 4px;
-  background: #3498db;
-  color: white;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.btn:disabled {
-  background: #95a5a6;
-  cursor: not-allowed;
-}
-
-.btn.secondary {
-  background: #e74c3c;
-}
-
-#results {
-  margin-top: 20px;
-  padding: 15px;
-  background: #ecf0f1;
-  border-radius: 4px;
-}
-
-#score {
-  color: #27ae60;
-  font-weight: bold;
-}
-
-.answer-row {
-  display: flex;
-  margin: 5px 0;
-  padding: 5px;
-  border-radius: 3px;
-}
-
-.correct {
-  background: rgba(46, 204, 113, 0.2);
-}
-
-.incorrect {
-  background: rgba(231, 76, 60, 0.2);
-}
-
-.answer-num {
-  width: 30px;
-  font-weight: bold;
-}
-
-.answer-value {
-  width: 50px;
-}
-
-#processingCanvas {
-  display: none;
-}
-/* Flash effect */
-.flash {
-  animation: flash 0.2s;
-}
-
-@keyframes flash {
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
-}
-
-/* Button states */
-.btn:disabled {
-  opacity: 0.7;
-}
-
-.btn.success {
-  background-color: #27ae60;
-}
-
-/* Overlay styling */
+/* Overlay */
 #overlay {
   position: absolute;
   top: 0;
@@ -140,7 +63,115 @@ h1 {
   box-sizing: border-box;
 }
 
-/* Loading indicator */
+/* Controls */
+.controls {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.btn {
+  flex: 1;
+  min-width: 120px;
+  padding: 12px;
+  border: none;
+  border-radius: 4px;
+  background: #3498db;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.btn:hover {
+  background: #2980b9;
+}
+
+.btn:disabled {
+  background: #95a5a6;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.btn.secondary {
+  background: #e74c3c;
+}
+
+.btn.secondary:hover {
+  background: #c0392b;
+}
+
+.btn.success {
+  background: #27ae60;
+}
+
+.btn.success:hover {
+  background: #219653;
+}
+
+/* Results Section */
+#results {
+  margin-top: 20px;
+  padding: 15px;
+  background: #ecf0f1;
+  border-radius: 4px;
+}
+
+#score {
+  color: #27ae60;
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+/* Answer Comparison */
+#answerComparison {
+  margin-top: 15px;
+}
+
+.answer-row {
+  display: flex;
+  margin: 5px 0;
+  padding: 8px;
+  border-radius: 3px;
+  align-items: center;
+}
+
+.answer-row:nth-child(even) {
+  background: rgba(0,0,0,0.05);
+}
+
+.correct {
+  background: rgba(46, 204, 113, 0.2) !important;
+}
+
+.incorrect {
+  background: rgba(231, 76, 60, 0.2) !important;
+}
+
+.answer-num {
+  width: 30px;
+  font-weight: bold;
+}
+
+.answer-value {
+  width: 50px;
+  font-family: monospace;
+  font-size: 1.1em;
+}
+
+/* Visual Effects */
+.flash {
+  animation: flash 0.2s;
+}
+
+@keyframes flash {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
 .loading {
   position: relative;
   color: transparent;
@@ -162,4 +193,52 @@ h1 {
 
 @keyframes spin {
   to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Status Messages */
+.status-message {
+  text-align: center;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 4px;
+}
+
+.status-success {
+  background: rgba(46, 204, 113, 0.2);
+  color: #27ae60;
+}
+
+.status-error {
+  background: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+}
+
+/* Hidden Elements */
+.hidden {
+  display: none !important;
+}
+
+#processingCanvas {
+  display: none;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .container {
+    padding: 15px;
+  }
+  
+  .btn {
+    min-width: 100%;
+  }
+  
+  .answer-row {
+    font-size: 0.9em;
+    padding: 6px;
+  }
+  
+  .answer-num, .answer-value {
+    width: auto;
+    margin-right: 10px;
+  }
 }
