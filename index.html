@@ -1,164 +1,889 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>OMR Sheet Scanner</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-      background: #f4f4f4;
-    }
-    canvas {
-      border: 1px solid #ccc;
-      margin-top: 10px;
-    }
-    input, button {
-      margin-top: 10px;
-      display: block;
-    }
-    #result {
-      margin-top: 20px;
-      font-size: 18px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMR Sheet Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            padding: 10px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .controls {
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #1e7e34;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+            transform: translateY(-2px);
+        }
+
+        .mode-indicator {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+
+        .mode-answer-key {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 2px solid #1976d2;
+        }
+
+        .mode-evaluate {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 2px solid #2e7d32;
+        }
+
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            min-height: 70vh;
+        }
+
+        .camera-section {
+            flex: 1;
+            min-width: 300px;
+            padding: 20px;
+            position: relative;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        canvas {
+            display: none;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .overlay svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .alignment-guide {
+            stroke: #00ff00;
+            stroke-width: 3;
+            fill: none;
+            stroke-dasharray: 10,5;
+            opacity: 0.8;
+        }
+
+        .corner-marker {
+            fill: #ff0000;
+            opacity: 0.7;
+        }
+
+        .capture-button {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: #fff;
+            border: 4px solid #007bff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .capture-button:hover {
+            transform: translateX(-50%) scale(1.1);
+            box-shadow: 0 4px 20px rgba(0,123,255,0.4);
+        }
+
+        .capture-button::after {
+            content: '';
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #007bff;
+        }
+
+        .results-section {
+            flex: 1;
+            min-width: 300px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-left: 1px solid #e9ecef;
+        }
+
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .result-header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        .answer-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .answer-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .answer-correct {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .answer-wrong {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .answer-neutral {
+            background: #e2e3e5;
+            color: #495057;
+            border: 1px solid #ced4da;
+        }
+
+        .score-display {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .score-number {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .score-label {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .student-id {
+            background: #007bff;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .processing {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5em;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #ffffff33;
+            border-top: 5px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid #f5c6cb;
+        }
+
+        .answer-key-display {
+            background: #e3f2fd;
+            border: 2px solid #1976d2;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .main-content {
+                flex-direction: column;
+            }
+
+            .results-section {
+                border-left: none;
+                border-top: 1px solid #e9ecef;
+            }
+        }
+    </style>
 </head>
 <body>
-  <h1>OMR Sheet Scanner</h1>
-  <input type="file" id="imageInput" accept="image/*" multiple>
-  <canvas id="canvas" width="800" height="600"></canvas>
-  <button id="processBtn">Scan and Grade</button>
-  <div id="result"></div>
+    <div class="container">
+        <div class="header">
+            <h1>OMR Sheet Scanner & Evaluator</h1>
+            <p>Scan answer keys and evaluate student answer sheets with high accuracy</p>
+        </div>
 
-  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script>
-    let canvas = document.getElementById("canvas");
-    let ctx = canvas.getContext("2d");
-    let input = document.getElementById("imageInput");
-    let resultDiv = document.getElementById("result");
-    let imageFiles = [];
+        <div class="controls">
+            <button id="startCamera" class="btn btn-primary">Start Camera</button>
+            <button id="setAnswerKey" class="btn btn-warning">Set Answer Key Mode</button>
+            <button id="evaluateMode" class="btn btn-success">Evaluate Mode</button>
+            <div id="modeIndicator" class="mode-indicator mode-answer-key">Answer Key Mode</div>
+        </div>
 
-    let answerKey = ["B", "D", "A", "C", "B", "C", "D", "E", "A", "C", "B", "D", "E", "A", "C", "B", "A", "C", "B", "D"];
+        <div class="main-content">
+            <div class="camera-section">
+                <div class="camera-container">
+                    <video id="video" autoplay playsinline></video>
+                    <div class="overlay">
+                        <svg>
+                            <!-- Alignment guide rectangle -->
+                            <rect class="alignment-guide" x="10%" y="15%" width="80%" height="70%" rx="10"/>
+                            <!-- Corner markers -->
+                            <circle class="corner-marker" cx="10%" cy="15%" r="8"/>
+                            <circle class="corner-marker" cx="90%" cy="15%" r="8"/>
+                            <circle class="corner-marker" cx="90%" cy="85%" r="8"/>
+                            <circle class="corner-marker" cx="10%" cy="85%" r="8"/>
+                            <!-- Center crosshair -->
+                            <line stroke="#00ff00" stroke-width="2" x1="50%" y1="45%" x2="50%" y2="55%" opacity="0.6"/>
+                            <line stroke="#00ff00" stroke-width="2" x1="45%" y1="50%" x2="55%" y2="50%" opacity="0.6"/>
+                        </svg>
+                    </div>
+                    <div class="capture-button" id="captureBtn"></div>
+                </div>
+                <canvas id="canvas"></canvas>
+                <canvas id="processCanvas"></canvas>
+            </div>
 
-    input.addEventListener("change", function(e) {
-      imageFiles = Array.from(e.target.files);
-    });
+            <div class="results-section">
+                <div id="answerKeySection" class="result-card" style="display: none;">
+                    <div class="result-header">Answer Key</div>
+                    <div id="answerKeyDisplay" class="answer-key-display"></div>
+                </div>
 
-    function onOpenCvReady() {
-      console.log("OpenCV.js is ready.");
-    }
+                <div id="resultsSection" class="result-card" style="display: none;">
+                    <div id="studentId" class="student-id">Student ID: ----</div>
+                    <div id="scoreDisplay" class="score-display">
+                        <div class="score-number" id="scoreNumber">--</div>
+                        <div class="score-label">Score out of 20</div>
+                    </div>
+                    <div class="result-header">Detailed Results</div>
+                    <div id="answerGrid" class="answer-grid"></div>
+                </div>
 
-    function detectRollNumber(gray, contours) {
-      const digits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
-      let rollRectangles = contours.map(cnt => cv.boundingRect(cnt)).filter(r => r.width > 10 && r.height > 10);
-      rollRectangles.sort((a, b) => a.x - b.x || a.y - b.y);
+                <div id="instructionsCard" class="result-card">
+                    <div class="result-header">Instructions</div>
+                    <ol style="padding-left: 20px; line-height: 1.6;">
+                        <li>First, scan the answer key sheet in "Answer Key Mode"</li>
+                        <li>Switch to "Evaluate Mode" to scan student answer sheets</li>
+                        <li>Align the OMR sheet within the green guide rectangle</li>
+                        <li>Ensure all corners are visible and the sheet is well-lit</li>
+                        <li>Click the capture button or tap the screen to scan</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
 
-      let rollDigits = [];
-      for (let col = 0; col < 4; col++) {
-        let columnDigits = rollRectangles.filter(r => r.x > rollRectangles[0].x + col * 20 - 5 && r.x < rollRectangles[0].x + col * 20 + 15);
-        columnDigits.sort((a, b) => a.y - b.y);
-        for (let i = 0; i < columnDigits.length; i++) {
-          let roi = gray.roi(columnDigits[i]);
-          let mean = cv.mean(roi);
-          roi.delete();
-          if (mean[0] < 130) {
-            rollDigits.push(digits[i]);
-            break;
-          }
-        }
-      }
-      return rollDigits.join("");
-    }
+    <div class="processing" id="processing">
+        <div style="text-align: center;">
+            <div class="spinner"></div>
+            <div>Processing OMR Sheet...</div>
+        </div>
+    </div>
 
-    function processImage(imageFile, callback) {
-      let reader = new FileReader();
-      reader.onload = function(event) {
-        let imgElement = new Image();
-        imgElement.onload = function() {
-          canvas.width = imgElement.width;
-          canvas.height = imgElement.height;
-          ctx.drawImage(imgElement, 0, 0);
+    <script>
+        let video, canvas, ctx, processCanvas, processCtx;
+        let isAnswerKeyMode = true;
+        let answerKey = null;
+        let stream = null;
 
-          let src = cv.imread(canvas);
-          let gray = new cv.Mat();
-          cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
-          let blurred = new cv.Mat();
-          cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-          let thresh = new cv.Mat();
-          cv.adaptiveThreshold(blurred, thresh, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY_INV, 11, 2);
-
-          let contours = new cv.MatVector();
-          let hierarchy = new cv.Mat();
-          cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-          let bubbles = [], bubbleRects = [];
-          for (let i = 0; i < contours.size(); ++i) {
-            let cnt = contours.get(i);
-            let area = cv.contourArea(cnt);
-            let perimeter = cv.arcLength(cnt, true);
-            if (perimeter === 0) continue;
-            let circularity = 4 * Math.PI * (area / (perimeter * perimeter));
-            if (circularity > 0.7 && circularity < 1.2 && area > 100 && area < 500) {
-              let rect = cv.boundingRect(cnt);
-              bubbleRects.push(rect);
-              bubbles.push(cnt);
-            }
-          }
-
-          bubbleRects.sort((a, b) => a.y - b.y || a.x - b.x);
-          let studentAnswers = Array(20).fill("-");
-
-          for (let i = 0; i < bubbleRects.length; ++i) {
-            let qIndex = Math.floor(i / 5);
-            let optionIndex = i % 5;
-            let roi = gray.roi(bubbleRects[i]);
-            let mean = cv.mean(roi);
-            roi.delete();
-            if (mean[0] < 130) {
-              studentAnswers[qIndex] = ["A", "B", "C", "D", "E"][optionIndex];
-            }
-          }
-
-          let score = 0;
-          for (let i = 0; i < answerKey.length; i++) {
-            if (studentAnswers[i] === answerKey[i]) score++;
-          }
-
-          let rollNumber = detectRollNumber(gray, bubbleRects);
-
-          src.delete(); gray.delete(); blurred.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
-          callback({ rollNumber: rollNumber || "NA", score: score, answers: studentAnswers });
+        // OMR Sheet configuration
+        const OMR_CONFIG = {
+            questions: 20,
+            optionsPerQuestion: 5,
+            options: ['A', 'B', 'C', 'D', 'E'],
+            idDigits: 4
         };
-        imgElement.src = event.target.result;
-      };
-      reader.readAsDataURL(imageFile);
-    }
 
-    document.getElementById("processBtn").onclick = function() {
-      if (imageFiles.length === 0) {
-        alert("Please upload at least one image.");
-        return;
-      }
-      let results = [];
-      let processed = 0;
-      resultDiv.innerHTML = "Processing...";
-
-      imageFiles.forEach(file => {
-        processImage(file, data => {
-          results.push(data);
-          processed++;
-          if (processed === imageFiles.length) {
-            let wb = XLSX.utils.book_new();
-            let ws = XLSX.utils.json_to_sheet(results);
-            XLSX.utils.book_append_sheet(wb, ws, "Grades");
-            XLSX.writeFile(wb, "omr_results.xlsx");
-
-            resultDiv.innerHTML = "Results saved to omr_results.xlsx";
-          }
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeElements();
+            setupEventListeners();
         });
-      });
-    };
-  </script>
-</body>
-</html>
+
+        function initializeElements() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            processCanvas = document.getElementById('processCanvas');
+            processCtx = processCanvas.getContext('2d');
+        }
+
+        function setupEventListeners() {
+            document.getElementById('startCamera').addEventListener('click', startCamera);
+            document.getElementById('setAnswerKey').addEventListener('click', () => setMode(true));
+            document.getElementById('evaluateMode').addEventListener('click', () => setMode(false));
+            document.getElementById('captureBtn').addEventListener('click', captureAndProcess);
+            
+            // Touch support for mobile
+            document.getElementById('captureBtn').addEventListener('touchstart', captureAndProcess);
+        }
+
+        async function startCamera() {
+            try {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+
+                const constraints = {
+                    video: {
+                        facingMode: 'environment', // Use back camera on mobile
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    processCanvas.width = video.videoWidth;
+                    processCanvas.height = video.videoHeight;
+                });
+
+                document.getElementById('startCamera').textContent = 'Camera Active';
+                document.getElementById('startCamera').style.background = '#28a745';
+            } catch (error) {
+                showError('Camera access failed: ' + error.message);
+            }
+        }
+
+        function setMode(isAnswerKey) {
+            isAnswerKeyMode = isAnswerKey;
+            const indicator = document.getElementById('modeIndicator');
+            
+            if (isAnswerKey) {
+                indicator.textContent = 'Answer Key Mode';
+                indicator.className = 'mode-indicator mode-answer-key';
+            } else {
+                indicator.textContent = 'Evaluate Mode';
+                indicator.className = 'mode-indicator mode-evaluate';
+                
+                if (!answerKey) {
+                    showError('Please set answer key first!');
+                    return;
+                }
+            }
+        }
+
+        async function captureAndProcess() {
+            if (!video.srcObject) {
+                showError('Please start camera first!');
+                return;
+            }
+
+            showProcessing(true);
+
+            try {
+                // Capture image from video
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Process the image
+                const results = await processOMRSheet(imageData);
+                
+                if (results.success) {
+                    if (isAnswerKeyMode) {
+                        answerKey = results.answers;
+                        displayAnswerKey(answerKey);
+                        showSuccess('Answer key captured successfully!');
+                    } else {
+                        evaluateAnswers(results.answers, results.studentId);
+                    }
+                } else {
+                    showError(results.error || 'Failed to process OMR sheet');
+                }
+            } catch (error) {
+                showError('Processing failed: ' + error.message);
+            } finally {
+                showProcessing(false);
+            }
+        }
+
+        async function processOMRSheet(imageData) {
+            try {
+                // Convert to grayscale and apply preprocessing
+                const grayData = convertToGrayscale(imageData);
+                
+                // Detect and correct skew
+                const correctedData = await correctSkew(grayData);
+                
+                // Detect OMR sheet boundaries
+                const boundaries = detectOMRBoundaries(correctedData);
+                
+                if (!boundaries) {
+                    return { success: false, error: 'Could not detect OMR sheet boundaries' };
+                }
+
+                // Extract regions for questions and student ID
+                const questionRegions = extractQuestionRegions(correctedData, boundaries);
+                const idRegion = extractIdRegion(correctedData, boundaries);
+
+                // Analyze bubbles
+                const answers = analyzeBubbles(questionRegions);
+                const studentId = analyzeIdBubbles(idRegion);
+
+                return {
+                    success: true,
+                    answers: answers,
+                    studentId: studentId
+                };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+
+        function convertToGrayscale(imageData) {
+            const data = new Uint8ClampedArray(imageData.data);
+            const grayData = new Uint8ClampedArray(imageData.width * imageData.height);
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+                grayData[i / 4] = gray;
+            }
+            
+            return {
+                data: grayData,
+                width: imageData.width,
+                height: imageData.height
+            };
+        }
+
+        async function correctSkew(grayData) {
+            // Simple skew correction - in a real implementation, you'd use more sophisticated methods
+            // For now, we'll assume the image is reasonably straight
+            return grayData;
+        }
+
+        function detectOMRBoundaries(grayData) {
+            // Detect the outer border of the OMR sheet
+            // This is a simplified implementation
+            const { width, height, data } = grayData;
+            
+            // Apply edge detection
+            const edges = detectEdges(data, width, height);
+            
+            // Find the main rectangular boundary
+            const boundary = findMainRectangle(edges, width, height);
+            
+            return boundary;
+        }
+
+        function detectEdges(data, width, height) {
+            const edges = new Uint8ClampedArray(width * height);
+            const threshold = 50;
+            
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const idx = y * width + x;
+                    
+                    // Sobel operator
+                    const gx = -data[idx - width - 1] - 2 * data[idx - 1] - data[idx + width - 1] +
+                              data[idx - width + 1] + 2 * data[idx + 1] + data[idx + width + 1];
+                    
+                    const gy = -data[idx - width - 1] - 2 * data[idx - width] - data[idx - width + 1] +
+                              data[idx + width - 1] + 2 * data[idx + width] + data[idx + width + 1];
+                    
+                    const magnitude = Math.sqrt(gx * gx + gy * gy);
+                    edges[idx] = magnitude > threshold ? 255 : 0;
+                }
+            }
+            
+            return edges;
+        }
+
+        function findMainRectangle(edges, width, height) {
+            // Simplified rectangle detection
+            // In a real implementation, you'd use Hough transform or contour detection
+            
+            let minX = width, maxX = 0, minY = height, maxY = 0;
+            let edgeCount = 0;
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    if (edges[y * width + x] > 0) {
+                        minX = Math.min(minX, x);
+                        maxX = Math.max(maxX, x);
+                        minY = Math.min(minY, y);
+                        maxY = Math.max(maxY, y);
+                        edgeCount++;
+                    }
+                }
+            }
+            
+            if (edgeCount < 100) { // Not enough edges detected
+                return null;
+            }
+            
+            return {
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY
+            };
+        }
+
+        function extractQuestionRegions(grayData, boundaries) {
+            // Extract regions for each question based on the known layout
+            const regions = [];
+            const { x, y, width, height } = boundaries;
+            
+            // Calculate positions based on the OMR layout
+            const leftColumnX = x + width * 0.05;
+            const rightColumnX = x + width * 0.35;
+            const startY = y + height * 0.15;
+            const questionHeight = height * 0.035;
+            const questionWidth = width * 0.25;
+            
+            for (let i = 0; i < 20; i++) {
+                const isLeftColumn = i < 10;
+                const rowIndex = i % 10;
+                
+                const regionX = isLeftColumn ? leftColumnX : rightColumnX;
+                const regionY = startY + rowIndex * questionHeight;
+                
+                regions.push({
+                    question: i + 1,
+                    x: Math.round(regionX),
+                    y: Math.round(regionY),
+                    width: Math.round(questionWidth),
+                    height: Math.round(questionHeight * 0.8)
+                });
+            }
+            
+            return regions;
+        }
+
+        function extractIdRegion(grayData, boundaries) {
+            // Extract the student ID region (4-digit ID on the right side)
+            const { x, y, width, height } = boundaries;
+            
+            return {
+                x: Math.round(x + width * 0.75),
+                y: Math.round(y + height * 0.15),
+                width: Math.round(width * 0.2),
+                height: Math.round(height * 0.6)
+            };
+        }
+
+        function analyzeBubbles(questionRegions) {
+            const answers = {};
+            const { data, width } = processCanvas.getContext('2d').getImageData(0, 0, processCanvas.width, processCanvas.height);
+            
+            questionRegions.forEach(region => {
+                const bubbleWidth = region.width / 5; // 5 options (A, B, C, D, E)
+                const bubbleStates = [];
+                
+                for (let optionIndex = 0; optionIndex < 5; optionIndex++) {
+                    const bubbleX = region.x + optionIndex * bubbleWidth + bubbleWidth * 0.5;
+                    const bubbleY = region.y + region.height * 0.5;
+                    
+                    const darkness = calculateBubbleDarkness(data, width, bubbleX, bubbleY, bubbleWidth * 0.3);
+                    bubbleStates.push({ option: OMR_CONFIG.options[optionIndex], darkness });
+                }
+                
+                // Find the darkest bubble (most filled)
+                bubbleStates.sort((a, b) => b.darkness - a.darkness);
+                const threshold = 0.3; // Threshold for considering a bubble filled
+                
+                if (bubbleStates[0].darkness > threshold) {
+                    answers[region.question] = bubbleStates[0].option;
+                } else {
+                    answers[region.question] = null; // No answer detected
+                }
+            });
+            
+            return answers;
+        }
+
+        function analyzeIdBubbles(idRegion) {
+            // Analyze the 4-digit student ID
+            const { data, width } = processCanvas.getContext('2d').getImageData(0, 0, processCanvas.width, processCanvas.height);
+            const studentId = [];
+            
+            const digitWidth = idRegion.width / 4;
+            const digitHeight = idRegion.height / 10; // 10 rows for digits 0-9
+            
+            for (let digitPos = 0; digitPos < 4; digitPos++) {
+                const digitX = idRegion.x + digitPos * digitWidth;
+                let maxDarkness = 0;
+                let selectedDigit = '0';
+                
+                for (let digit = 0; digit < 10; digit++) {
+                    const bubbleX = digitX + digitWidth * 0.5;
+                    const bubbleY = idRegion.y + digit * digitHeight + digitHeight * 0.5;
+                    
+                    const darkness = calculateBubbleDarkness(data, width, bubbleX, bubbleY, digitWidth * 0.2);
+                    
+                    if (darkness > maxDarkness && darkness > 0.3) {
+                        maxDarkness = darkness;
+                        selectedDigit = digit.toString();
+                    }
+                }
+                
+                studentId.push(selectedDigit);
+            }
+            
+            return studentId.join('');
+        }
+
+        function calculateBubbleDarkness(imageData, width, centerX, centerY, radius) {
+            let totalPixels = 0;
+            let darkPixels = 0;
+            
+            const x = Math.round(centerX);
+            const y = Math.round(centerY);
+            const r = Math.round(radius);
+            
+            for (let dy = -r; dy <= r; dy++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    if (dx * dx + dy * dy <= r * r) {
+                        const pixelX = x + dx;
+                        const pixelY = y + dy;
+                        
+                        if (pixelX >= 0 && pixelX < width && pixelY >= 0) {
+                            const pixelIndex = (pixelY * width + pixelX) * 4;
+                            const gray = (imageData[pixelIndex] + imageData[pixelIndex + 1] + imageData[pixelIndex + 2]) / 3;
+                            
+                            totalPixels++;
+                            if (gray < 128) { // Dark pixel
+                                darkPixels++;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return totalPixels > 0 ? darkPixels / totalPixels : 0;
+        }
+
+        function displayAnswerKey(answers) {
+            const display = document.getElementById('answerKeyDisplay');
+            const answerSection = document.getElementById('answerKeySection');
+            
+            let html = '<strong>Answer Key Set:</strong><br>';
+            for (let i = 1; i <= 20; i++) {
+                html += `Q${i}: ${answers[i] || 'No Answer'} &nbsp;&nbsp;`;
+                if (i % 5 === 0) html += '<br>';
+            }
+            
+            display.innerHTML = html;
+            answerSection.style.display = 'block';
+        }
+
+        function evaluateAnswers(studentAnswers, studentId) {
+            const resultsSection = document.getElementById('resultsSection');
+            const studentIdEl = document.getElementById('studentId');
+            const scoreNumberEl = document.getElementById('scoreNumber');
+            const answerGridEl = document.getElementById('answerGrid');
+            
+            let correctCount = 0;
+            let html = '';
+            
+            for (let i = 1; i <= 20; i++) {
+                const studentAnswer = studentAnswers[i];
+                const correctAnswer = answerKey[i];
+                
+                let className = 'answer-neutral';
+                let status = 'No Answer';
+                
+                if (studentAnswer && correctAnswer) {
+                    if (studentAnswer === correctAnswer) {
+                        correctCount++;
+                        className = 'answer-correct';
+                        status = '✓';
+                    } else {
+                        className = 'answer-wrong';
+                        status = `✗ (${correctAnswer})`;
+                    }
+                } else if (studentAnswer) {
+                    className = 'answer-wrong';
+                    status = `✗ (${correctAnswer || 'N/A'})`;
+                } else if (correctAnswer) {
+                    className = 'answer-wrong';
+                    status = `✗ (${correctAnswer})`;
+                }
+                
+                html += `<div class="answer-item ${className}">Q${i}: ${studentAnswer || '--'} ${status}</div>`;
+            }
+            
+            studentIdEl.textContent = `Student ID: ${studentId}`;
+            scoreNumberEl.textContent = correctCount;
+            answerGridEl.innerHTML = html;
+            resultsSection.style.display = 'block';
+            
+            // Hide instructions after first evaluation
+            document.getElementById('instructionsCard').style.display = 'none';
+        }
+
+        function showProcessing(show) {
+            document.getElementById('processing').style.display = show ? 'flex' : 'none';
+        }
+
+        function showError(message) {
+            // Remove existing error messages
+            const existingErrors = document.querySelectorAll('.error-message');
+            existingErrors.forEach(error => error.remove());
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            
+            document.querySelector('.controls').appendChild(errorDiv);
+            
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+
+        function showSuccess(message
