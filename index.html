@@ -19,11 +19,6 @@
     .scan-option {
       margin-bottom: 20px;
     }
-    .option-buttons {
-      display: flex;
-      gap: 10px;
-      margin-top: 10px;
-    }
     button {
       padding: 10px 15px;
       background: #0066cc;
@@ -36,17 +31,11 @@
       background: #ccc;
       cursor: not-allowed;
     }
-    #cameraView {
-      width: 100%;
-      background: #000;
-      aspect-ratio: 3/4;
+    #previewImage {
+      max-width: 100%;
+      max-height: 300px;
       margin: 10px 0;
       display: none;
-    }
-    #cameraView video, #previewImage {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
     }
     #fileInput {
       display: none;
@@ -76,31 +65,18 @@
   <div class="scanner-section">
     <div class="scan-option">
       <h3>1. Answer Key</h3>
-      <div class="option-buttons">
-        <button id="keyCameraBtn">Take Photo</button>
-        <button id="keyGalleryBtn">Choose from Gallery</button>
-        <input type="file" id="keyFileInput" accept="image/*">
-      </div>
+      <button id="keyGalleryBtn">Choose Answer Key from Gallery</button>
+      <input type="file" id="keyFileInput" accept="image/*">
+      <img id="keyPreviewImage">
       <div id="keyStatus"></div>
     </div>
 
     <div class="scan-option">
       <h3>2. Student Answers</h3>
-      <div class="option-buttons">
-        <button id="answersCameraBtn" disabled>Take Photo</button>
-        <button id="answersGalleryBtn" disabled>Choose from Gallery</button>
-        <input type="file" id="answersFileInput" accept="image/*">
-      </div>
+      <button id="answersGalleryBtn" disabled>Choose Student Answers from Gallery</button>
+      <input type="file" id="answersFileInput" accept="image/*">
+      <img id="answersPreviewImage">
       <div id="answersStatus"></div>
-    </div>
-  </div>
-
-  <div id="cameraView">
-    <video id="cameraFeed" autoplay playsinline></video>
-    <img id="previewImage" style="display:none;">
-    <div class="camera-controls" style="margin-top:10px;">
-      <button id="captureBtn" style="display:none;">Capture</button>
-      <button id="cancelBtn" style="display:none;">Cancel</button>
     </div>
   </div>
 
@@ -113,90 +89,40 @@
 
   <script>
     // DOM elements
-    const keyCameraBtn = document.getElementById('keyCameraBtn');
     const keyGalleryBtn = document.getElementById('keyGalleryBtn');
     const keyFileInput = document.getElementById('keyFileInput');
+    const keyPreviewImage = document.getElementById('keyPreviewImage');
     const keyStatus = document.getElementById('keyStatus');
     
-    const answersCameraBtn = document.getElementById('answersCameraBtn');
     const answersGalleryBtn = document.getElementById('answersGalleryBtn');
     const answersFileInput = document.getElementById('answersFileInput');
+    const answersPreviewImage = document.getElementById('answersPreviewImage');
     const answersStatus = document.getElementById('answersStatus');
-    
-    const cameraView = document.getElementById('cameraView');
-    const cameraFeed = document.getElementById('cameraFeed');
-    const previewImage = document.getElementById('previewImage');
-    const captureBtn = document.getElementById('captureBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
     
     const scoreDisplay = document.getElementById('score');
     const answerComparison = document.getElementById('answerComparison');
     
     // State variables
-    let currentMode = null; // 'key' or 'answers'
-    let stream = null;
     let answerKey = [];
     let studentAnswers = [];
 
-    // Initialize camera
-    async function startCamera() {
-      try {
-        stopCamera();
-        
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        });
-        
-        cameraFeed.srcObject = stream;
-        cameraView.style.display = 'block';
-        previewImage.style.display = 'none';
-        cameraFeed.style.display = 'block';
-        captureBtn.style.display = 'inline-block';
-        cancelBtn.style.display = 'inline-block';
-        
-        return true;
-      } catch (error) {
-        console.error('Camera error:', error);
-        updateStatus(`Camera error: ${error.message}`, currentMode);
-        return false;
-      }
-    }
-
-    function stopCamera() {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
-      }
-      cameraView.style.display = 'none';
-    }
-
-    function updateStatus(message, mode) {
-      if (mode === 'key') {
+    function updateStatus(message, isKey) {
+      if (isKey) {
         keyStatus.textContent = message;
-      } else if (mode === 'answers') {
+      } else {
         answersStatus.textContent = message;
       }
     }
 
-    // Process image from either camera or file
-    async function processImage(imageSource) {
+    // Process image from file
+    async function processImage(imageElement, isKey) {
       const canvas = document.getElementById('processingCanvas');
       const ctx = canvas.getContext('2d');
       
       // Set canvas dimensions
-      if (imageSource instanceof HTMLVideoElement) {
-        canvas.width = imageSource.videoWidth;
-        canvas.height = imageSource.videoHeight;
-        ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
-      } else {
-        canvas.width = imageSource.naturalWidth;
-        canvas.height = imageSource.naturalHeight;
-        ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
-      }
+      canvas.width = imageElement.naturalWidth;
+      canvas.height = imageElement.naturalHeight;
+      ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
       
       // Here you would add your OMR processing logic
       // For demo purposes, we'll just return dummy data
@@ -208,69 +134,34 @@
       return answers;
     }
 
-    // Handle capture from camera
-    async function handleCapture() {
-      try {
-        updateStatus('Processing...', currentMode);
-        captureBtn.disabled = true;
-        
-        const answers = await processImage(cameraFeed);
-        
-        if (currentMode === 'key') {
-          answerKey = answers;
-          updateStatus('Answer key captured!', 'key');
-          answersCameraBtn.disabled = false;
-          answersGalleryBtn.disabled = false;
-        } else {
-          studentAnswers = answers;
-          updateStatus('Answers captured!', 'answers');
-          displayResults();
-        }
-        
-        stopCamera();
-      } catch (error) {
-        console.error('Processing error:', error);
-        updateStatus('Processing failed', currentMode);
-      }
-    }
-
     // Handle file selection
-    function handleFileSelect(event, mode) {
-      currentMode = mode;
+    function handleFileSelect(event, isKey) {
       const file = event.target.files[0];
       if (!file) return;
       
       const reader = new FileReader();
       reader.onload = async function(e) {
+        const previewImage = isKey ? keyPreviewImage : answersPreviewImage;
         previewImage.src = e.target.result;
-        previewImage.onload = async function() {
-          cameraView.style.display = 'block';
-          cameraFeed.style.display = 'none';
-          previewImage.style.display = 'block';
-          captureBtn.style.display = 'inline-block';
-          cancelBtn.style.display = 'inline-block';
+        previewImage.style.display = 'block';
+        
+        updateStatus('Processing...', isKey);
+        try {
+          const answers = await processImage(previewImage, isKey);
           
-          updateStatus('Processing...', mode);
-          try {
-            const answers = await processImage(previewImage);
-            
-            if (mode === 'key') {
-              answerKey = answers;
-              updateStatus('Answer key loaded!', 'key');
-              answersCameraBtn.disabled = false;
-              answersGalleryBtn.disabled = false;
-            } else {
-              studentAnswers = answers;
-              updateStatus('Answers loaded!', 'answers');
-              displayResults();
-            }
-            
-            cameraView.style.display = 'none';
-          } catch (error) {
-            console.error('Processing error:', error);
-            updateStatus('Processing failed', mode);
+          if (isKey) {
+            answerKey = answers;
+            updateStatus('Answer key loaded!', true);
+            answersGalleryBtn.disabled = false;
+          } else {
+            studentAnswers = answers;
+            updateStatus('Answers loaded!', false);
+            displayResults();
           }
-        };
+        } catch (error) {
+          console.error('Processing error:', error);
+          updateStatus('Processing failed', isKey);
+        }
       };
       reader.readAsDataURL(file);
     }
@@ -298,26 +189,12 @@
     }
 
     // Event listeners
-    keyCameraBtn.addEventListener('click', async () => {
-      currentMode = 'key';
-      if (await startCamera()) {
-        updateStatus('Camera ready - point at answer key', 'key');
-      }
-    });
-
     keyGalleryBtn.addEventListener('click', () => {
       keyFileInput.click();
     });
 
     keyFileInput.addEventListener('change', (e) => {
-      handleFileSelect(e, 'key');
-    });
-
-    answersCameraBtn.addEventListener('click', async () => {
-      currentMode = 'answers';
-      if (await startCamera()) {
-        updateStatus('Camera ready - point at student answers', 'answers');
-      }
+      handleFileSelect(e, true);
     });
 
     answersGalleryBtn.addEventListener('click', () => {
@@ -325,14 +202,7 @@
     });
 
     answersFileInput.addEventListener('change', (e) => {
-      handleFileSelect(e, 'answers');
-    });
-
-    captureBtn.addEventListener('click', handleCapture);
-
-    cancelBtn.addEventListener('click', () => {
-      stopCamera();
-      updateStatus('Cancelled', currentMode);
+      handleFileSelect(e, false);
     });
   </script>
 </body>
