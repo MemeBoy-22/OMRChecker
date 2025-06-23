@@ -1,21 +1,19 @@
-// Global variables
-let cvReady = false;
-let stream = null;
+let cameraStream = null;
 let videoElement = null;
-let flashOn = false;
 let answerKey = [];
+let studentAnswers = [];
+let cvReady = false;
 
 // DOM elements
-const startCameraBtn = document.getElementById('startCameraBtn');
-const captureBtn = document.getElementById('captureBtn');
-const toggleFlashBtn = document.getElementById('toggleFlashBtn');
-const cameraPreview = document.getElementById('cameraPreview');
-const scannerOverlay = document.getElementById('scannerOverlay');
-const resultContainer = document.getElementById('resultContainer');
-const processingCanvas = document.getElementById('processingCanvas');
+const scanKeyBtn = document.getElementById('scanKeyBtn');
+const scanAnswersBtn = document.getElementById('scanAnswersBtn');
+const resetBtn = document.getElementById('resetBtn');
+const cameraView = document.getElementById('cameraView');
+const scoreDisplay = document.getElementById('score');
+const answerComparison = document.getElementById('answerComparison');
 
 // Initialize OpenCV
-function initializeOpenCV() {
+function initOpenCV() {
   return new Promise((resolve) => {
     if (window.cv) {
       cv.onRuntimeInitialized = () => {
@@ -24,173 +22,59 @@ function initializeOpenCV() {
         resolve();
       };
     } else {
-      console.error('OpenCV.js not loaded');
+      console.error('OpenCV not loaded');
       resolve();
     }
   });
 }
 
-// Create scanner overlay
-function createScannerOverlay() {
-  scannerOverlay.innerHTML = '';
-  
-  // ID section overlay
-  const idOverlay = document.createElement('div');
-  idOverlay.id = 'idOverlay';
-  idOverlay.className = 'overlay-guide';
-  idOverlay.title = 'Align ID section here';
-  scannerOverlay.appendChild(idOverlay);
-  
-  // Questions section overlay
-  const questionsOverlay = document.createElement('div');
-  questionsOverlay.id = 'questionsOverlay';
-  questionsOverlay.className = 'overlay-guide';
-  questionsOverlay.title = 'Align questions here';
-  scannerOverlay.appendChild(questionsOverlay);
-}
-
 // Start camera
 async function startCamera() {
   try {
-    // Check for camera support
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('Camera access not supported by your browser');
-    }
-    
-    // Request camera access
-    stream = await navigator.mediaDevices.getUserMedia({ 
-      video: { 
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: {
         facingMode: 'environment',
         width: { ideal: 1280 },
         height: { ideal: 720 }
-      } 
+      }
     });
     
-    // Create video element
     videoElement = document.createElement('video');
-    videoElement.srcObject = stream;
+    videoElement.srcObject = cameraStream;
     videoElement.setAttribute('playsinline', '');
     videoElement.play();
     
-    // Clear preview and add video
-    cameraPreview.innerHTML = '';
-    cameraPreview.appendChild(videoElement);
+    cameraView.innerHTML = '';
+    cameraView.appendChild(videoElement);
     
-    // Enable buttons
-    captureBtn.disabled = false;
-    toggleFlashBtn.disabled = false;
-    startCameraBtn.disabled = true;
-    
-    // Create overlay
-    createScannerOverlay();
-    
-    // Start alignment detection
-    detectAlignment();
-    
+    return true;
   } catch (error) {
-    alert(`Camera error: ${error.message}`);
     console.error('Camera error:', error);
-  }
-}
-
-// Detect alignment quality
-function detectAlignment() {
-  if (!videoElement) return;
-  
-  // Create canvas for alignment detection
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = videoElement.videoWidth;
-  canvas.height = videoElement.videoHeight;
-  
-  // Draw frame and analyze
-  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  
-  // Check for black borders (simplified)
-  const borderThreshold = 50; // Dark enough to be border
-  let borderMatches = 0;
-  let totalBorderPixels = 0;
-  
-  // Sample border pixels
-  for (let i = 0; i < imageData.data.length; i += 4) {
-    const r = imageData.data[i];
-    const g = imageData.data[i + 1];
-    const b = imageData.data[i + 2];
-    const brightness = (r + g + b) / 3;
-    
-    // Check if pixel is in border area
-    const x = (i / 4) % canvas.width;
-    const y = Math.floor((i / 4) / canvas.width);
-    
-    if (x < 10 || x > canvas.width - 10 || y < 10 || y > canvas.height - 10) {
-      totalBorderPixels++;
-      if (brightness < borderThreshold) {
-        borderMatches++;
-      }
-    }
-  }
-  
-  // Calculate alignment score
-  const alignmentScore = borderMatches / totalBorderPixels;
-  const isAligned = alignmentScore > 0.7; // 70% of border is dark
-  
-  // Update UI
-  const overlayElements = document.querySelectorAll('.overlay-guide');
-  overlayElements.forEach(el => {
-    el.classList.remove('alignment-good', 'alignment-bad');
-    el.classList.add(isAligned ? 'alignment-good' : 'alignment-bad');
-  });
-  
-  // Continue monitoring
-  requestAnimationFrame(detectAlignment);
-}
-
-// Capture image
-async function captureImage() {
-  if (!videoElement) return;
-  
-  try {
-    // Add flash effect
-    cameraPreview.classList.add('flash-effect');
-    setTimeout(() => cameraPreview.classList.remove('flash-effect'), 500);
-    
-    // Create canvas from video frame
-    processingCanvas.width = videoElement.videoWidth;
-    processingCanvas.height = videoElement.videoHeight;
-    const ctx = processingCanvas.getContext('2d');
-    ctx.drawImage(videoElement, 0, 0, processingCanvas.width, processingCanvas.height);
-    
-    // Process the OMR sheet
-    const result = await processOMRSheet(processingCanvas);
-    
-    // Display results
-    displayResults(result);
-    
-  } catch (error) {
-    alert(`Processing error: ${error.message}`);
-    console.error('Processing error:', error);
+    alert('Could not access camera. Please ensure permissions are granted.');
+    return false;
   }
 }
 
 // Process OMR sheet
-async function processOMRSheet(canvas) {
-  if (!cvReady) {
-    throw new Error('OpenCV is not ready yet');
-  }
+async function processOMR() {
+  const canvas = document.getElementById('processingCanvas');
+  const ctx = canvas.getContext('2d');
   
+  // Set canvas dimensions to match video
+  canvas.width = videoElement.videoWidth;
+  canvas.height = videoElement.videoHeight;
+  
+  // Capture current frame
+  ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+  
+  // Process with OpenCV
   const src = cv.imread(canvas);
-  
-  // Preprocessing pipeline
   const gray = new cv.Mat();
   cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
   
-  const blur = new cv.Mat();
-  cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
-  
   const thresh = new cv.Mat();
   cv.adaptiveThreshold(
-    blur, 
+    gray,
     thresh,
     255,
     cv.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -199,124 +83,152 @@ async function processOMRSheet(canvas) {
     2
   );
   
-  // Process ID section (4 digits)
-  const idDigits = [];
-  const idStartX = 0.7 * canvas.width; // Adjust based on your overlay
-  const idStartY = 0.1 * canvas.height;
-  const idColGap = 0.05 * canvas.width;
-  const idRowGap = 0.03 * canvas.height;
-  const idSize = 0.04 * canvas.width;
-  
-  for (let c = 0; c < 4; c++) {
-    let maxVal = -1, digit = 0;
-    for (let r = 0; r < 10; r++) {
-      const x = Math.round(idStartX + c * idColGap);
-      const y = Math.round(idStartY + r * idRowGap);
-      const cell = thresh.roi(new cv.Rect(x, y, idSize, idSize));
-      const val = cv.countNonZero(cell);
-      if (val > maxVal) {
-        maxVal = val;
-        digit = r;
-      }
-      cell.delete();
-    }
-    idDigits.push(digit);
-  }
-  
-  // Process answer bubbles (20 questions × 5 choices)
+  // Process 20 questions (A-E)
   const answers = [];
-  const qStartX = 0.1 * canvas.width;
-  const qStartY = 0.25 * canvas.height;
-  const qColGap = 0.08 * canvas.width;
-  const qRowGap = 0.03 * canvas.height;
-  const qSize = 0.04 * canvas.width;
+  const questionSpacing = canvas.height / 21; // 20 questions with spacing
+  const optionSpacing = canvas.width / 6; // 5 options with spacing
   
-  for (let r = 0; r < 20; r++) {
-    let maxVal = -1, marked = 0;
-    for (let c = 0; c < 5; c++) {
-      const x = Math.round(qStartX + c * qColGap);
-      const y = Math.round(qStartY + r * qRowGap);
-      const bubble = thresh.roi(new cv.Rect(x, y, qSize, qSize));
-      const nonZero = cv.countNonZero(bubble);
-      if (nonZero > maxVal) {
-        maxVal = nonZero;
-        marked = c;
+  for (let q = 0; q < 20; q++) {
+    let maxMarked = { val: -1, option: null };
+    
+    for (let o = 0; o < 5; o++) {
+      const x = optionSpacing * (o + 0.5);
+      const y = questionSpacing * (q + 1);
+      const radius = Math.min(optionSpacing, questionSpacing) * 0.3;
+      
+      // Count marked pixels in bubble area
+      const bubbleArea = thresh.roi(new cv.Rect(
+        x - radius,
+        y - radius,
+        radius * 2,
+        radius * 2
+      ));
+      
+      const marked = cv.countNonZero(bubbleArea);
+      bubbleArea.delete();
+      
+      if (marked > maxMarked.val) {
+        maxMarked = { val: marked, option: String.fromCharCode(65 + o) }; // 65 = 'A'
       }
-      bubble.delete();
     }
-    answers.push(['A', 'B', 'C', 'D', 'E'][marked]);
+    
+    answers.push(maxMarked.option);
   }
   
   // Clean up
   src.delete();
   gray.delete();
-  blur.delete();
   thresh.delete();
   
-  return {
-    id: idDigits.join(''),
-    answers,
-    timestamp: new Date().toLocaleString()
-  };
+  return answers;
 }
 
-// Display results
-function displayResults(result) {
-  const resultBox = document.createElement('div');
-  resultBox.className = 'result-box';
+// Compare answers and calculate score
+function compareAnswers() {
+  let score = 0;
+  const comparison = [];
   
-  let content = `
-    <h3>Scan Results</h3>
-    <p><strong>ID:</strong> ${result.id}</p>
-    <p><strong>Time:</strong> ${result.timestamp}</p>
-    <div class="answers-grid">
-  `;
+  for (let i = 0; i < 20; i++) {
+    const isCorrect = studentAnswers[i] === answerKey[i];
+    if (isCorrect) score++;
+    
+    comparison.push({
+      number: i + 1,
+      student: studentAnswers[i],
+      key: answerKey[i],
+      correct: isCorrect
+    });
+  }
   
-  // Display answers in a grid
-  for (let i = 0; i < result.answers.length; i++) {
-    content += `
-      <div class="answer-item">
-        <span class="question-num">${i + 1}</span>
-        <span class="answer-value">${result.answers[i]}</span>
-      </div>
+  return { score, comparison };
+}
+
+// Display comparison results
+function displayResults() {
+  const { score, comparison } = compareAnswers();
+  
+  scoreDisplay.textContent = `${score}/20`;
+  answerComparison.innerHTML = '';
+  
+  comparison.forEach(item => {
+    const row = document.createElement('div');
+    row.className = `answer-row ${item.correct ? 'correct' : 'incorrect'}`;
+    
+    row.innerHTML = `
+      <div class="answer-num">${item.number}.</div>
+      <div class="answer-value">${item.student || '?'}</div>
+      <div class="answer-value">${item.key}</div>
+      <div>${item.correct ? '✓' : '✗'}</div>
     `;
-  }
-  
-  content += `</div>`;
-  resultBox.innerHTML = content;
-  resultContainer.appendChild(resultBox);
+    
+    answerComparison.appendChild(row);
+  });
 }
 
-// Toggle flash
-function toggleFlash() {
-  if (!stream) return;
-  
-  const videoTrack = stream.getVideoTracks()[0];
-  if (!videoTrack || !('applyConstraints' in videoTrack)) {
-    alert('Flash not supported on this device');
-    return;
+// Stop camera
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+    cameraStream = null;
   }
-  
-  flashOn = !flashOn;
-  toggleFlashBtn.textContent = flashOn ? 'Flash ON' : 'Flash OFF';
-  
-  videoTrack.applyConstraints({
-    advanced: [{ torch: flashOn }]
-  }).catch(e => console.error('Flash error:', e));
+  cameraView.innerHTML = '';
 }
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', async () => {
-  await initializeOpenCV();
+  await initOpenCV();
   
-  startCameraBtn.addEventListener('click', startCamera);
-  captureBtn.addEventListener('click', captureImage);
-  toggleFlashBtn.addEventListener('click', toggleFlash);
-  
-  // Clean up camera on page unload
-  window.addEventListener('beforeunload', () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+  // Scan Answer Key
+  scanKeyBtn.addEventListener('click', async () => {
+    if (!cvReady) {
+      alert('OpenCV is still loading. Please wait...');
+      return;
     }
+    
+    const started = await startCamera();
+    if (!started) return;
+    
+    scanKeyBtn.textContent = 'Capture Answer Key';
+    scanKeyBtn.onclick = async () => {
+      answerKey = await processOMR();
+      stopCamera();
+      scanKeyBtn.textContent = 'Answer Key Scanned';
+      scanKeyBtn.disabled = true;
+      scanAnswersBtn.disabled = false;
+    };
   });
+  
+  // Scan Student Answers
+  scanAnswersBtn.addEventListener('click', async () => {
+    const started = await startCamera();
+    if (!started) return;
+    
+    scanAnswersBtn.textContent = 'Capture Student Answers';
+    scanAnswersBtn.onclick = async () => {
+      studentAnswers = await processOMR();
+      stopCamera();
+      scanAnswersBtn.textContent = 'Answers Scanned';
+      displayResults();
+    };
+  });
+  
+  // Reset
+  resetBtn.addEventListener('click', () => {
+    stopCamera();
+    answerKey = [];
+    studentAnswers = [];
+    scanKeyBtn.textContent = '1. Scan Answer Key';
+    scanKeyBtn.disabled = false;
+    scanKeyBtn.onclick = null;
+    scanAnswersBtn.textContent = '2. Scan Student Answers';
+    scanAnswersBtn.disabled = true;
+    scanAnswersBtn.onclick = null;
+    scoreDisplay.textContent = '-';
+    answerComparison.innerHTML = '';
+  });
+});
+
+// Clean up on page exit
+window.addEventListener('beforeunload', () => {
+  stopCamera();
 });
