@@ -2,392 +2,69 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OMR Scanner</title>
+  <title>OMR Sheet Scanner</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 600px;
-      margin: 0 auto;
       padding: 20px;
+      background: #f9f9f9;
     }
-    .scanner-section {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+    canvas {
+      border: 1px solid #ccc;
+      margin-top: 10px;
     }
-    .scan-option {
-      margin-bottom: 20px;
-    }
-    button {
-      padding: 10px 15px;
-      background: #0066cc;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-    #status {
-      margin: 10px 0;
-      color: #666;
-    }
-    .results {
-      margin-top: 20px;
-    }
-    .answer-row {
-      display: flex;
-      margin: 5px 0;
-    }
-    .correct {
-      color: green;
-    }
-    .incorrect {
-      color: red;
-    }
-    #fileInput {
-      display: none;
-    }
-    .progress {
-      margin: 10px 0;
-      height: 20px;
-      background: #f0f0f0;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .progress-bar {
-      height: 100%;
-      background: #0066cc;
-      width: 0%;
-      transition: width 0.3s;
+    input, button {
+      margin-top: 15px;
     }
   </style>
 </head>
 <body>
-  <h1>OMR Answer Sheet Scanner</h1>
-  
-  <div class="scanner-section">
-    <div class="scan-option">
-      <h3>1. Answer Key</h3>
-      <button id="keyGalleryBtn">Choose Answer Key from Gallery</button>
-      <input type="file" id="keyFileInput" accept="image/*">
-      <div id="keyStatus"></div>
-    </div>
+  <h1>OMR Sheet Scanner</h1>
 
-    <div class="scan-option">
-      <h3>2. Student Answers</h3>
-      <button id="answersGalleryBtn" disabled>Choose Student Answers from Gallery</button>
-      <input type="file" id="answersFileInput" accept="image/*">
-      <div id="answersStatus"></div>
-    </div>
-  </div>
+  <input type="file" id="imageInput" accept="image/*" />
+  <br/>
+  <canvas id="canvas" width="800" height="600"></canvas>
+  <br/>
+  <button id="processBtn">Process OMR Sheet</button>
 
-  <div class="progress" id="progressContainer" style="display:none;">
-    <div class="progress-bar" id="progressBar"></div>
-  </div>
-
-  <div class="results">
-    <h2>Results: <span id="score">-</span>/20</h2>
-    <div id="answerComparison"></div>
-  </div>
-
-  <canvas id="processingCanvas" style="display:none;"></canvas>
-  <canvas id="debugCanvas" style="display:none;"></canvas>
-
-  <script src="https://docs.opencv.org/4.9.0/opencv.js" async></script>
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();"></script>
   <script>
-    // DOM elements
-    const keyGalleryBtn = document.getElementById('keyGalleryBtn');
-    const keyFileInput = document.getElementById('keyFileInput');
-    const keyStatus = document.getElementById('keyStatus');
-    
-    const answersGalleryBtn = document.getElementById('answersGalleryBtn');
-    const answersFileInput = document.getElementById('answersFileInput');
-    const answersStatus = document.getElementById('answersStatus');
-    
-    const scoreDisplay = document.getElementById('score');
-    const answerComparison = document.getElementById('answerComparison');
-    const progressContainer = document.getElementById('progressContainer');
-    const progressBar = document.getElementById('progressBar');
-    
-    // State variables
-    let answerKey = [];
-    let studentAnswers = [];
-    let cvReady = false;
+    let imgElement = null;
+    let canvas = document.getElementById("canvas");
+    let ctx = canvas.getContext("2d");
+    let input = document.getElementById("imageInput");
 
-    // Initialize OpenCV
-    function initOpenCV() {
-      return new Promise((resolve) => {
-        if (typeof cv !== 'undefined') {
-          cv.onRuntimeInitialized = () => {
-            cvReady = true;
-            console.log('OpenCV ready');
-            resolve();
-          };
-        } else {
-          console.error('OpenCV not loaded');
-          resolve();
+    input.addEventListener("change", function(e) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        imgElement = new Image();
+        imgElement.onload = function() {
+          canvas.width = imgElement.width;
+          canvas.height = imgElement.height;
+          ctx.drawImage(imgElement, 0, 0);
         }
-      });
-    }
-
-    function updateStatus(message, isKey) {
-      if (isKey) {
-        keyStatus.textContent = message;
-      } else {
-        answersStatus.textContent = message;
-      }
-    }
-
-    // Enhanced bubble detection
-    async function detectBubbles(image) {
-      const src = cv.imread(image);
-      const gray = new cv.Mat();
-      const blur = new cv.Mat();
-      const thresh = new cv.Mat();
-      const hierarchy = new cv.Mat();
-      const contours = new cv.MatVector();
-      
-      // Convert to grayscale
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      
-      // Apply Gaussian blur
-      cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
-      
-      // Adaptive thresholding
-      cv.adaptiveThreshold(
-        blur, 
-        thresh, 
-        255, 
-        cv.ADAPTIVE_THRESH_GAUSSIAN_C, 
-        cv.THRESH_BINARY_INV, 
-        11, 
-        2
-      );
-      
-      // Find contours
-      cv.findContours(
-        thresh, 
-        contours, 
-        hierarchy, 
-        cv.RETR_EXTERNAL, 
-        cv.CHAIN_APPROX_SIMPLE
-      );
-      
-      // Filter and process bubbles
-      const bubbles = [];
-      const minArea = 100;
-      const maxArea = 1000;
-      
-      for (let i = 0; i < contours.size(); i++) {
-        const contour = contours.get(i);
-        const area = cv.contourArea(contour);
-        
-        // Filter by area
-        if (area < minArea || area > maxArea) continue;
-        
-        // Check circularity
-        const perimeter = cv.arcLength(contour, true);
-        const circularity = (4 * Math.PI * area) / (perimeter * perimeter);
-        
-        if (circularity > 0.7) { // Good circle
-          const rect = cv.boundingRect(contour);
-          const bubbleRegion = thresh.roi(rect);
-          const filledPixels = cv.countNonZero(bubbleRegion);
-          const fillRatio = filledPixels / (rect.width * rect.height);
-          
-          bubbles.push({
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height,
-            fillRatio: fillRatio
-          });
-          
-          bubbleRegion.delete();
-        }
-      }
-      
-      // Sort bubbles by position (top to bottom, left to right)
-      bubbles.sort((a, b) => {
-        const yDiff = a.y - b.y;
-        if (Math.abs(yDiff) > 10) return yDiff;
-        return a.x - b.x;
-      });
-      
-      // Group into rows (questions)
-      const rows = [];
-      let currentRow = [];
-      let lastY = -1;
-      
-      bubbles.forEach(bubble => {
-        if (lastY === -1) lastY = bubble.y;
-        
-        if (Math.abs(bubble.y - lastY) > 10) {
-          if (currentRow.length > 0) rows.push(currentRow);
-          currentRow = [];
-          lastY = bubble.y;
-        }
-        
-        currentRow.push(bubble);
-      });
-      
-      if (currentRow.length > 0) rows.push(currentRow);
-      
-      // Clean up
-      src.delete();
-      gray.delete();
-      blur.delete();
-      thresh.delete();
-      contours.delete();
-      hierarchy.delete();
-      
-      return rows;
-    }
-
-    // Process OMR sheet
-    async function processOMR(file, isKey) {
-      return new Promise((resolve) => {
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '0%';
-        
-        const reader = new FileReader();
-        reader.onload = async function(e) {
-          const img = new Image();
-          img.onload = async function() {
-            updateStatus('Processing image...', isKey);
-            progressBar.style.width = '30%';
-            
-            try {
-              const canvas = document.getElementById('processingCanvas');
-              const ctx = canvas.getContext('2d');
-              
-              canvas.width = img.naturalWidth;
-              canvas.height = img.naturalHeight;
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              
-              updateStatus('Detecting bubbles...', isKey);
-              progressBar.style.width = '60%';
-              
-              const bubbleRows = await detectBubbles(canvas);
-              const answers = [];
-              
-              // Process each row (question)
-              for (let i = 0; i < Math.min(bubbleRows.length, 20); i++) {
-                const row = bubbleRows[i];
-                // Sort bubbles in row left to right
-                row.sort((a, b) => a.x - b.x);
-                
-                // Find most filled bubble (marked answer)
-                let markedIndex = -1;
-                let maxFill = 0;
-                
-                for (let j = 0; j < Math.min(row.length, 5); j++) {
-                  if (row[j].fillRatio > maxFill && row[j].fillRatio > 0.5) {
-                    maxFill = row[j].fillRatio;
-                    markedIndex = j;
-                  }
-                }
-                
-                answers.push(markedIndex !== -1 ? String.fromCharCode(65 + markedIndex) : null);
-              }
-              
-              progressBar.style.width = '100%';
-              setTimeout(() => {
-                progressContainer.style.display = 'none';
-              }, 500);
-              
-              resolve(answers);
-            } catch (error) {
-              console.error('Processing error:', error);
-              updateStatus('Processing failed', isKey);
-              progressContainer.style.display = 'none';
-              resolve([]);
-            }
-          };
-          img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    // Handle file selection
-    async function handleFileSelect(event, isKey) {
-      const file = event.target.files[0];
-      if (!file) return;
-      
-      if (!cvReady) {
-        updateStatus('Waiting for image processing to load...', isKey);
-        await initOpenCV();
-      }
-      
-      updateStatus('Processing...', isKey);
-      try {
-        const answers = await processOMR(file, isKey);
-        
-        if (isKey) {
-          answerKey = answers;
-          updateStatus(`Answer key processed (${answers.filter(a => a).length} answers)`, true);
-          answersGalleryBtn.disabled = false;
-        } else {
-          studentAnswers = answers;
-          updateStatus(`Answers processed (${answers.filter(a => a).length} answers)`, false);
-          displayResults();
-        }
-      } catch (error) {
-        console.error('Processing error:', error);
-        updateStatus('Processing failed', isKey);
-      }
-    }
-
-    function displayResults() {
-      if (answerKey.length === 0 || studentAnswers.length === 0) return;
-      
-      let score = 0;
-      let comparisonHTML = '';
-      
-      for (let i = 0; i < 20; i++) {
-        const isCorrect = studentAnswers[i] === answerKey[i];
-        if (isCorrect) score++;
-        
-        comparisonHTML += `
-          <div class="answer-row ${isCorrect ? 'correct' : 'incorrect'}">
-            Q${i+1}: ${studentAnswers[i] || 'Unanswered'} 
-            (Correct: ${answerKey[i]}) ${isCorrect ? '✓' : '✗'}
-          </div>
-        `;
-      }
-      
-      scoreDisplay.textContent = score;
-      answerComparison.innerHTML = comparisonHTML;
-    }
-
-    // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-      initOpenCV().then(() => {
-        console.log('System ready');
-      });
+        imgElement.src = event.target.result;
+      };
+      reader.readAsDataURL(e.target.files[0]);
     });
 
-    // Event listeners
-    keyGalleryBtn.addEventListener('click', () => {
-      keyFileInput.click();
-    });
+    function onOpenCvReady() {
+      console.log("OpenCV.js is ready.");
+    }
 
-    keyFileInput.addEventListener('change', (e) => {
-      handleFileSelect(e, true);
-    });
+    document.getElementById("processBtn").onclick = function() {
+      if (!imgElement) {
+        alert("Please upload an image first.");
+        return;
+      }
 
-    answersGalleryBtn.addEventListener('click', () => {
-      answersFileInput.click();
-    });
-
-    answersFileInput.addEventListener('change', (e) => {
-      handleFileSelect(e, false);
-    });
+      let src = cv.imread(canvas);
+      let dst = new cv.Mat();
+      cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+      cv.imshow(canvas, dst);
+      src.delete(); dst.delete();
+      alert("Grayscale conversion done. Bubble detection will be added next.");
+    };
   </script>
 </body>
 </html>
