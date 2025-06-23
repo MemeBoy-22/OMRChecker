@@ -11,14 +11,18 @@
       margin: 0 auto;
       padding: 20px;
     }
-    #cameraView {
-      width: 100%;
-      background: #000;
-      aspect-ratio: 3/4;
-      margin: 20px 0;
+    .scanner-section {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
-    #cameraView video {
-      width: 100%;
+    .scan-option {
+      margin-bottom: 20px;
+    }
+    .option-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
     }
     button {
       padding: 10px 15px;
@@ -27,98 +31,309 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      margin-right: 10px;
     }
     button:disabled {
       background: #ccc;
+      cursor: not-allowed;
+    }
+    #cameraView {
+      width: 100%;
+      background: #000;
+      aspect-ratio: 3/4;
+      margin: 10px 0;
+      display: none;
+    }
+    #cameraView video, #previewImage {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    #fileInput {
+      display: none;
     }
     #status {
       margin: 10px 0;
       color: #666;
+    }
+    .results {
+      margin-top: 20px;
+    }
+    .answer-row {
+      display: flex;
+      margin: 5px 0;
+    }
+    .correct {
+      color: green;
+    }
+    .incorrect {
+      color: red;
     }
   </style>
 </head>
 <body>
   <h1>OMR Answer Sheet Scanner</h1>
   
-  <div id="cameraView"></div>
-  
-  <button id="startBtn">Start Camera</button>
-  <button id="captureBtn" disabled>Capture</button>
-  
-  <div id="status">Camera not started</div>
-  
-  <script>
-    let stream = null;
-    const startBtn = document.getElementById('startBtn');
-    const captureBtn = document.getElementById('captureBtn');
-    const statusDiv = document.getElementById('status');
-    const cameraView = document.getElementById('cameraView');
+  <div class="scanner-section">
+    <div class="scan-option">
+      <h3>1. Answer Key</h3>
+      <div class="option-buttons">
+        <button id="keyCameraBtn">Take Photo</button>
+        <button id="keyGalleryBtn">Choose from Gallery</button>
+        <input type="file" id="keyFileInput" accept="image/*">
+      </div>
+      <div id="keyStatus"></div>
+    </div>
 
-    // Start camera with absolute certainty
+    <div class="scan-option">
+      <h3>2. Student Answers</h3>
+      <div class="option-buttons">
+        <button id="answersCameraBtn" disabled>Take Photo</button>
+        <button id="answersGalleryBtn" disabled>Choose from Gallery</button>
+        <input type="file" id="answersFileInput" accept="image/*">
+      </div>
+      <div id="answersStatus"></div>
+    </div>
+  </div>
+
+  <div id="cameraView">
+    <video id="cameraFeed" autoplay playsinline></video>
+    <img id="previewImage" style="display:none;">
+    <div class="camera-controls" style="margin-top:10px;">
+      <button id="captureBtn" style="display:none;">Capture</button>
+      <button id="cancelBtn" style="display:none;">Cancel</button>
+    </div>
+  </div>
+
+  <div class="results">
+    <h2>Results: <span id="score">-</span>/20</h2>
+    <div id="answerComparison"></div>
+  </div>
+
+  <canvas id="processingCanvas" style="display:none;"></canvas>
+
+  <script>
+    // DOM elements
+    const keyCameraBtn = document.getElementById('keyCameraBtn');
+    const keyGalleryBtn = document.getElementById('keyGalleryBtn');
+    const keyFileInput = document.getElementById('keyFileInput');
+    const keyStatus = document.getElementById('keyStatus');
+    
+    const answersCameraBtn = document.getElementById('answersCameraBtn');
+    const answersGalleryBtn = document.getElementById('answersGalleryBtn');
+    const answersFileInput = document.getElementById('answersFileInput');
+    const answersStatus = document.getElementById('answersStatus');
+    
+    const cameraView = document.getElementById('cameraView');
+    const cameraFeed = document.getElementById('cameraFeed');
+    const previewImage = document.getElementById('previewImage');
+    const captureBtn = document.getElementById('captureBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    
+    const scoreDisplay = document.getElementById('score');
+    const answerComparison = document.getElementById('answerComparison');
+    
+    // State variables
+    let currentMode = null; // 'key' or 'answers'
+    let stream = null;
+    let answerKey = [];
+    let studentAnswers = [];
+
+    // Initialize camera
     async function startCamera() {
       try {
-        statusDiv.textContent = "Starting camera...";
-        startBtn.disabled = true;
+        stopCamera();
         
-        // Stop any existing stream first
-        if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-        }
-        
-        // Get camera with explicit requirements
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'environment',
-            width: { min: 640, ideal: 1280 },
-            height: { min: 480, ideal: 720 }
-          },
-          audio: false
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
         });
         
-        // Create video element
-        const video = document.createElement('video');
-        video.srcObject = stream;
-        video.autoplay = true;
-        video.playsInline = true;
+        cameraFeed.srcObject = stream;
+        cameraView.style.display = 'block';
+        previewImage.style.display = 'none';
+        cameraFeed.style.display = 'block';
+        captureBtn.style.display = 'inline-block';
+        cancelBtn.style.display = 'inline-block';
         
-        // Clear previous and add new video
-        cameraView.innerHTML = '';
-        cameraView.appendChild(video);
-        
-        // Wait for video to be ready
-        await new Promise((resolve) => {
-          video.onloadedmetadata = () => {
-            video.play().then(resolve).catch(resolve);
-          };
-        });
-        
-        statusDiv.textContent = "Camera ready - point at answer sheet";
-        captureBtn.disabled = false;
-        
+        return true;
       } catch (error) {
-        statusDiv.textContent = `Error: ${error.message}`;
-        startBtn.disabled = false;
-        console.error("Camera error:", error);
+        console.error('Camera error:', error);
+        updateStatus(`Camera error: ${error.message}`, currentMode);
+        return false;
       }
     }
 
-    // Capture image
-    function captureImage() {
-      statusDiv.textContent = "Processing...";
-      captureBtn.disabled = true;
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      cameraView.style.display = 'none';
+    }
+
+    function updateStatus(message, mode) {
+      if (mode === 'key') {
+        keyStatus.textContent = message;
+      } else if (mode === 'answers') {
+        answersStatus.textContent = message;
+      }
+    }
+
+    // Process image from either camera or file
+    async function processImage(imageSource) {
+      const canvas = document.getElementById('processingCanvas');
+      const ctx = canvas.getContext('2d');
       
-      // Simulate processing delay
-      setTimeout(() => {
-        statusDiv.textContent = "Capture complete!";
-        startBtn.disabled = false;
+      // Set canvas dimensions
+      if (imageSource instanceof HTMLVideoElement) {
+        canvas.width = imageSource.videoWidth;
+        canvas.height = imageSource.videoHeight;
+        ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
+      } else {
+        canvas.width = imageSource.naturalWidth;
+        canvas.height = imageSource.naturalHeight;
+        ctx.drawImage(imageSource, 0, 0, canvas.width, canvas.height);
+      }
+      
+      // Here you would add your OMR processing logic
+      // For demo purposes, we'll just return dummy data
+      const answers = [];
+      for (let i = 0; i < 20; i++) {
+        answers.push(String.fromCharCode(65 + Math.floor(Math.random() * 5))); // A-E
+      }
+      
+      return answers;
+    }
+
+    // Handle capture from camera
+    async function handleCapture() {
+      try {
+        updateStatus('Processing...', currentMode);
         captureBtn.disabled = true;
-      }, 2000);
+        
+        const answers = await processImage(cameraFeed);
+        
+        if (currentMode === 'key') {
+          answerKey = answers;
+          updateStatus('Answer key captured!', 'key');
+          answersCameraBtn.disabled = false;
+          answersGalleryBtn.disabled = false;
+        } else {
+          studentAnswers = answers;
+          updateStatus('Answers captured!', 'answers');
+          displayResults();
+        }
+        
+        stopCamera();
+      } catch (error) {
+        console.error('Processing error:', error);
+        updateStatus('Processing failed', currentMode);
+      }
+    }
+
+    // Handle file selection
+    function handleFileSelect(event, mode) {
+      currentMode = mode;
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        previewImage.src = e.target.result;
+        previewImage.onload = async function() {
+          cameraView.style.display = 'block';
+          cameraFeed.style.display = 'none';
+          previewImage.style.display = 'block';
+          captureBtn.style.display = 'inline-block';
+          cancelBtn.style.display = 'inline-block';
+          
+          updateStatus('Processing...', mode);
+          try {
+            const answers = await processImage(previewImage);
+            
+            if (mode === 'key') {
+              answerKey = answers;
+              updateStatus('Answer key loaded!', 'key');
+              answersCameraBtn.disabled = false;
+              answersGalleryBtn.disabled = false;
+            } else {
+              studentAnswers = answers;
+              updateStatus('Answers loaded!', 'answers');
+              displayResults();
+            }
+            
+            cameraView.style.display = 'none';
+          } catch (error) {
+            console.error('Processing error:', error);
+            updateStatus('Processing failed', mode);
+          }
+        };
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function displayResults() {
+      if (answerKey.length === 0 || studentAnswers.length === 0) return;
+      
+      let score = 0;
+      let comparisonHTML = '';
+      
+      for (let i = 0; i < 20; i++) {
+        const isCorrect = studentAnswers[i] === answerKey[i];
+        if (isCorrect) score++;
+        
+        comparisonHTML += `
+          <div class="answer-row ${isCorrect ? 'correct' : 'incorrect'}">
+            Q${i+1}: ${studentAnswers[i]} 
+            (Correct: ${answerKey[i]}) ${isCorrect ? '✓' : '✗'}
+          </div>
+        `;
+      }
+      
+      scoreDisplay.textContent = score;
+      answerComparison.innerHTML = comparisonHTML;
     }
 
     // Event listeners
-    startBtn.addEventListener('click', startCamera);
-    captureBtn.addEventListener('click', captureImage);
+    keyCameraBtn.addEventListener('click', async () => {
+      currentMode = 'key';
+      if (await startCamera()) {
+        updateStatus('Camera ready - point at answer key', 'key');
+      }
+    });
+
+    keyGalleryBtn.addEventListener('click', () => {
+      keyFileInput.click();
+    });
+
+    keyFileInput.addEventListener('change', (e) => {
+      handleFileSelect(e, 'key');
+    });
+
+    answersCameraBtn.addEventListener('click', async () => {
+      currentMode = 'answers';
+      if (await startCamera()) {
+        updateStatus('Camera ready - point at student answers', 'answers');
+      }
+    });
+
+    answersGalleryBtn.addEventListener('click', () => {
+      answersFileInput.click();
+    });
+
+    answersFileInput.addEventListener('change', (e) => {
+      handleFileSelect(e, 'answers');
+    });
+
+    captureBtn.addEventListener('click', handleCapture);
+
+    cancelBtn.addEventListener('click', () => {
+      stopCamera();
+      updateStatus('Cancelled', currentMode);
+    });
   </script>
 </body>
 </html>
