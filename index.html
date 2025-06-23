@@ -138,7 +138,8 @@
             width: 100%;
             height: auto;
             display: block;
-            transform: rotate(0deg); /* Ensure natural orientation */
+            transform-origin: center;
+            transition: transform 0.3s ease;
         }
 
         canvas {
@@ -589,18 +590,29 @@
                 video.srcObject = stream;
 
                 await new Promise((resolve, reject) => {
-                    video.onloadedmetadata = resolve;
+                    video.onloadedmetadata = () => {
+                        // Detect and correct orientation
+                        const isPortrait = video.videoHeight > video.videoWidth;
+                        if (isPortrait) {
+                            video.style.transform = 'rotate(90deg)';
+                            canvas.width = video.videoHeight;
+                            canvas.height = video.videoWidth;
+                            processCanvas.width = canvas.width;
+                            processCanvas.height = canvas.height;
+                        } else {
+                            video.style.transform = 'rotate(0deg)';
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            processCanvas.width = canvas.width;
+                            processCanvas.height = canvas.height;
+                        }
+                        resolve();
+                    };
                     video.onerror = reject;
                     setTimeout(() => reject(new Error('Video load timeout')), 5000);
                 });
 
                 await video.play();
-
-                // Adjust canvas dimensions based on actual video size
-                canvas.width = video.videoWidth || 640;
-                canvas.height = video.videoHeight || 480;
-                processCanvas.width = canvas.width;
-                processCanvas.height = canvas.height;
 
                 console.log('Video dimensions:', canvas.width, 'x', canvas.height);
 
@@ -624,17 +636,29 @@
                     video.srcObject = stream;
 
                     await new Promise((resolve, reject) => {
-                        video.onloadedmetadata = resolve;
+                        video.onloadedmetadata = () => {
+                            // Detect and correct orientation
+                            const isPortrait = video.videoHeight > video.videoWidth;
+                            if (isPortrait) {
+                                video.style.transform = 'rotate(90deg)';
+                                canvas.width = video.videoHeight;
+                                canvas.height = video.videoWidth;
+                                processCanvas.width = canvas.width;
+                                processCanvas.height = canvas.height;
+                            } else {
+                                video.style.transform = 'rotate(0deg)';
+                                canvas.width = video.videoWidth;
+                                canvas.height = video.videoHeight;
+                                processCanvas.width = canvas.width;
+                                processCanvas.height = canvas.height;
+                            }
+                            resolve();
+                        };
                         video.onerror = reject;
                         setTimeout(() => reject(new Error('Video load timeout')), 5000);
                     });
 
                     await video.play();
-
-                    canvas.width = video.videoWidth || 640;
-                    canvas.height = video.videoHeight || 480;
-                    processCanvas.width = canvas.width;
-                    processCanvas.height = canvas.height;
 
                     console.log('Fallback video dimensions:', canvas.width, 'x', canvas.height);
 
