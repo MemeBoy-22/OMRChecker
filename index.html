@@ -2,48 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OMR Answer Sheet Checker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OMR Answer Sheet Scanner</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>OMR Sheet Checker</h1>
-      <p>Upload answer key and scanned OMR sheets to automatically grade them</p>
+      <h1>OMR Sheet Scanner</h1>
+      <p>Align your answer sheet within the frame below</p>
     </header>
 
-    <div class="controls">
-      <div class="upload-section">
-        <h2>1. Upload Answer Key</h2>
-        <input type="file" id="keyFile" accept=".json,.txt">
-        <div id="keyInfo"></div>
+    <div class="scanner-container">
+      <div id="scannerOverlay">
+        <!-- Overlay elements will be added here -->
       </div>
-
-      <div class="upload-section">
-        <h2>2. Upload OMR Sheets</h2>
-        <input type="file" id="sheetImage" accept="image/*" multiple>
-        <div id="sheetInfo"></div>
-      </div>
-
-      <div class="mode-selector">
-        <h2>Processing Mode</h2>
-        <label>
-          <input type="radio" name="mode" value="generic" checked>
-          <span>Generic OMR (Auto-detect bubbles)</span>
-        </label>
-        <label>
-          <input type="radio" name="mode" value="specific">
-          <span>Specific OMR (Fixed layout)</span>
-        </label>
-      </div>
-
-      <button id="processBtn" class="btn">Process Sheets</button>
+      <div id="cameraPreview"></div>
     </div>
 
-    <div class="progress-container" id="progressContainer">
-      <div class="progress-bar" id="progressBar"></div>
-      <div id="progressText">0%</div>
+    <div class="controls">
+      <button id="startCameraBtn" class="btn">Start Camera</button>
+      <button id="captureBtn" class="btn" disabled>Capture Sheet</button>
+      <button id="toggleFlashBtn" class="btn" disabled>Toggle Flash</button>
     </div>
 
     <div class="results" id="results">
@@ -52,9 +32,9 @@
     </div>
   </div>
 
-  <canvas id="canvas"></canvas>
+  <canvas id="processingCanvas"></canvas>
 
   <script src="https://docs.opencv.org/4.9.0/opencv.js" async></script>
-  <script src="script.js"></script>
+  <script src="scanner.js"></script>
 </body>
 </html>
