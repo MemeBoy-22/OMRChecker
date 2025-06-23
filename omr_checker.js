@@ -18,7 +18,7 @@ const answerComparison = document.getElementById('answerComparison');
 // Initialize OpenCV
 function initOpenCV() {
   return new Promise((resolve) => {
-    if (window.cv) {
+    if (typeof cv !== 'undefined') {
       cv.onRuntimeInitialized = () => {
         cvReady = true;
         console.log('OpenCV ready');
@@ -69,7 +69,7 @@ async function startCamera() {
     return true;
   } catch (error) {
     console.error('Camera error:', error);
-    alert(`Camera error: ${error.message}`);
+    alert('Camera error: ' + error.message);
     return false;
   }
 }
@@ -169,12 +169,12 @@ function compareAnswers() {
 function displayResults() {
   const { score, comparison } = compareAnswers();
   
-  scoreDisplay.textContent = `${score}/20`;
+  scoreDisplay.textContent = score + '/20';
   answerComparison.innerHTML = '';
   
   comparison.forEach(item => {
     const row = document.createElement('div');
-    row.className = `answer-row ${item.correct ? 'correct' : 'incorrect'}`;
+    row.className = 'answer-row ' + (item.correct ? 'correct' : 'incorrect');
     
     row.innerHTML = `
       <div class="answer-num">${item.number}.</div>
