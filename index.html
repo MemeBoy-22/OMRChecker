@@ -31,15 +31,6 @@
       background: #ccc;
       cursor: not-allowed;
     }
-    #previewImage {
-      max-width: 100%;
-      max-height: 300px;
-      margin: 10px 0;
-      display: none;
-    }
-    #fileInput {
-      display: none;
-    }
     #status {
       margin: 10px 0;
       color: #666;
@@ -57,6 +48,9 @@
     .incorrect {
       color: red;
     }
+    #fileInput {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -67,7 +61,6 @@
       <h3>1. Answer Key</h3>
       <button id="keyGalleryBtn">Choose Answer Key from Gallery</button>
       <input type="file" id="keyFileInput" accept="image/*">
-      <img id="keyPreviewImage">
       <div id="keyStatus"></div>
     </div>
 
@@ -75,7 +68,6 @@
       <h3>2. Student Answers</h3>
       <button id="answersGalleryBtn" disabled>Choose Student Answers from Gallery</button>
       <input type="file" id="answersFileInput" accept="image/*">
-      <img id="answersPreviewImage">
       <div id="answersStatus"></div>
     </div>
   </div>
@@ -91,12 +83,10 @@
     // DOM elements
     const keyGalleryBtn = document.getElementById('keyGalleryBtn');
     const keyFileInput = document.getElementById('keyFileInput');
-    const keyPreviewImage = document.getElementById('keyPreviewImage');
     const keyStatus = document.getElementById('keyStatus');
     
     const answersGalleryBtn = document.getElementById('answersGalleryBtn');
     const answersFileInput = document.getElementById('answersFileInput');
-    const answersPreviewImage = document.getElementById('answersPreviewImage');
     const answersStatus = document.getElementById('answersStatus');
     
     const scoreDisplay = document.getElementById('score');
@@ -115,55 +105,56 @@
     }
 
     // Process image from file
-    async function processImage(imageElement, isKey) {
-      const canvas = document.getElementById('processingCanvas');
-      const ctx = canvas.getContext('2d');
-      
-      // Set canvas dimensions
-      canvas.width = imageElement.naturalWidth;
-      canvas.height = imageElement.naturalHeight;
-      ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
-      
-      // Here you would add your OMR processing logic
-      // For demo purposes, we'll just return dummy data
-      const answers = [];
-      for (let i = 0; i < 20; i++) {
-        answers.push(String.fromCharCode(65 + Math.floor(Math.random() * 5))); // A-E
-      }
-      
-      return answers;
+    async function processImage(file, isKey) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = new Image();
+          img.onload = async function() {
+            const canvas = document.getElementById('processingCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Here you would add your OMR processing logic
+            // For demo purposes, we'll just return dummy data
+            const answers = [];
+            for (let i = 0; i < 20; i++) {
+              answers.push(String.fromCharCode(65 + Math.floor(Math.random() * 5))); // A-E
+            }
+            
+            resolve(answers);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
     }
 
     // Handle file selection
-    function handleFileSelect(event, isKey) {
+    async function handleFileSelect(event, isKey) {
       const file = event.target.files[0];
       if (!file) return;
       
-      const reader = new FileReader();
-      reader.onload = async function(e) {
-        const previewImage = isKey ? keyPreviewImage : answersPreviewImage;
-        previewImage.src = e.target.result;
-        previewImage.style.display = 'block';
+      updateStatus('Processing...', isKey);
+      try {
+        const answers = await processImage(file, isKey);
         
-        updateStatus('Processing...', isKey);
-        try {
-          const answers = await processImage(previewImage, isKey);
-          
-          if (isKey) {
-            answerKey = answers;
-            updateStatus('Answer key loaded!', true);
-            answersGalleryBtn.disabled = false;
-          } else {
-            studentAnswers = answers;
-            updateStatus('Answers loaded!', false);
-            displayResults();
-          }
-        } catch (error) {
-          console.error('Processing error:', error);
-          updateStatus('Processing failed', isKey);
+        if (isKey) {
+          answerKey = answers;
+          updateStatus('Answer key processed!', true);
+          answersGalleryBtn.disabled = false;
+        } else {
+          studentAnswers = answers;
+          updateStatus('Answers processed!', false);
+          displayResults();
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (error) {
+        console.error('Processing error:', error);
+        updateStatus('Processing failed', isKey);
+      }
     }
 
     function displayResults() {
