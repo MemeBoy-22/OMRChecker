@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OMR Answer Sheet Checker</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #canvas { display: none; }
+    .result-box { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>OMR Sheet Checker</h1>
+
+  <p><b>Step 1:</b> Upload answer key (JSON or TXT)</p>
+  <input type="file" id="keyFile"><br><br>
+
+  <p><b>Step 2:</b> Upload scanned OMR sheet(s) (image files)</p>
+  <input type="file" id="sheetImage" accept="image/*" multiple><br><br>
+
+  <button onclick="checkOMR()">Check Sheet(s)</button>
+
+  <h2>Results:</h2>
+  <div id="result"></div>
+
+  <canvas id="canvas"></canvas>
+
+  <script async src="https://docs.opencv.org/4.9.0/opencv.js"></script>
+  <script src="omr_checker.js"></script>
+</body>
+</html>
