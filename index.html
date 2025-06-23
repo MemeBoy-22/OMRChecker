@@ -575,9 +575,9 @@
         function updateOverlay() {
             if (canvas.height > canvas.width) { // Portrait mode
                 const aspectRatio = canvas.width / canvas.height;
-                const templateWidth = 0.70; // Original width percentage
-                const templateHeight = 0.80; // Original height percentage
-                const scaledWidth = Math.min(templateWidth * canvas.height, canvas.width);
+                const templateWidth = 0.70 * canvas.height; // Original width based on height
+                const templateHeight = 0.80 * canvas.height; // Original height based on height
+                const scaledWidth = Math.min(templateWidth, canvas.width);
                 const scaledHeight = (scaledWidth / templateWidth) * templateHeight;
 
                 const xOffset = (canvas.width - scaledWidth) / 2;
@@ -592,7 +592,7 @@
                     <line stroke="#00ff00" stroke-width="2" x1="${(xOffset + scaledWidth * 0.45) / canvas.width * 100}%" y1="${(yOffset + scaledHeight * 0.50) / canvas.height * 100}%" x2="${(xOffset + scaledWidth * 0.55) / canvas.width * 100}%" y2="${(yOffset + scaledHeight * 0.50) / canvas.height * 100}%" opacity="0.6"/>
                     <line stroke="#00ff00" stroke-width="2" x1="${(xOffset + scaledWidth * 0.50) / canvas.width * 100}%" y1="${(yOffset + scaledHeight * 0.45) / canvas.height * 100}%" x2="${(xOffset + scaledWidth * 0.50) / canvas.width * 100}%" y2="${(yOffset + scaledHeight * 0.55) / canvas.height * 100}%" opacity="0.6"/>
                 `;
-            } else { // Landscape mode (default)
+            } else { // Landscape mode
                 overlaySvg.innerHTML = `
                     <rect class="alignment-guide" x="15%" y="10%" width="70%" height="80%" rx="10"/>
                     <circle class="corner-marker" cx="15%" cy="10%" r="8"/>
@@ -780,8 +780,48 @@
         function detectOMRBoundaries(grayData) {
             const { data, width, height } = grayData;
             const edges = detectEdges(data, width, height);
-            const boundary = findMainRectangle(edges, width, height);
-            return boundary;
+            let minX = width, maxX = 0, minY = height, maxY = 0;
+            let edgeCount = 0;
+
+            // Enhanced edge filtering to focus on OMR sheet borders
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = y * width + x;
+                    if (edges[idx] > 0) {
+                        // Check for consistent edges (e.g., avoid noise)
+                        let isBorder = true;
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                const newY = y + dy;
+                                const newX = x + dx;
+                                if (newY >= 0 && newY < height && newX >= 0 && newX < width) {
+                                    const newIdx = newY * width + newX;
+                                    if (edges[newIdx] === 0 && Math.abs(dy) + Math.abs(dx) === 1) {
+                                        isBorder = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!isBorder) break;
+                        }
+                        if (isBorder) {
+                            minX = Math.min(minX, x);
+                            maxX = Math.max(maxX, x);
+                            minY = Math.min(minY, y);
+                            maxY = Math.max(maxY, y);
+                            edgeCount++;
+                        }
+                    }
+                }
+            }
+
+            if (edgeCount < 100) return null;
+
+            // Ensure minimum size for OMR sheet
+            const minSize = Math.min(width, height) * 0.5;
+            if (maxX - minX < minSize || maxY - minY < minSize) return null;
+
+            return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
         }
 
         function detectEdges(data, width, height) {
@@ -801,27 +841,6 @@
             }
 
             return edges;
-        }
-
-        function findMainRectangle(edges, width, height) {
-            let minX = width, maxX = 0, minY = height, maxY = 0;
-            let edgeCount = 0;
-
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    if (edges[y * width + x] > 0) {
-                        minX = Math.min(minX, x);
-                        maxX = Math.max(maxX, x);
-                        minY = Math.min(minY, y);
-                        maxY = Math.max(maxY, y);
-                        edgeCount++;
-                    }
-                }
-            }
-
-            if (edgeCount < 100) return null;
-
-            return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
         }
 
         function extractQuestionRegions(grayData, boundaries) {
@@ -1064,22 +1083,33 @@
                     const boundaries = detectOMRBoundaries(grayData);
 
                     if (boundaries) {
-                        const { x, y, width, height } = boundaries;
+                        console.log('Detected boundaries:', boundaries);
                         const guide = getGuideDimensions();
+                        console.log('Guide dimensions:', guide);
                         const guideX = guide.x;
                         const guideY = guide.y;
                         const guideWidth = guide.width;
                         const guideHeight = guide.height;
+                        const tolerance = 100; // Increased tolerance for better alignment detection
 
-                        const dx = Math.abs(x - guideX);
-                        const dy = Math.abs(y - guideY);
-                        const dWidth = Math.abs(width - guideWidth);
-                        const dHeight = Math.abs(height - guideHeight);
+                        const dx = Math.abs(boundaries.x - guideX);
+                        const dy = Math.abs(boundaries.y - guideY);
+                        const dWidth = Math.abs(boundaries.width - guideWidth);
+                        const dHeight = Math.abs(boundaries.height - guideHeight);
 
-                        if (dx < 50 && dy < 50 && dWidth < 50 && dHeight < 50) {
+                        console.log('Alignment differences:', { dx, dy, dWidth, dHeight });
+
+                        // Check if all corners align within tolerance
+                        const cornerTolerance = 50;
+                        const cornersMatch = checkCornerAlignment(boundaries, guide, cornerTolerance);
+
+                        if (dx < tolerance && dy < tolerance && dWidth < tolerance && dHeight < tolerance && cornersMatch) {
+                            console.log('Alignment achieved, capturing...');
                             isAligned = true;
                             captureAndProcess();
                         }
+                    } else {
+                        console.log('No boundaries detected');
                     }
                 }
                 requestAnimationFrame(checkAlignment);
@@ -1113,6 +1143,30 @@
                     height: canvas.height * 0.80
                 };
             }
+        }
+
+        function checkCornerAlignment(boundaries, guide, tolerance) {
+            const corners = [
+                { x: boundaries.x, y: boundaries.y },
+                { x: boundaries.x + boundaries.width, y: boundaries.y },
+                { x: boundaries.x + boundaries.width, y: boundaries.y + boundaries.height },
+                { x: boundaries.x, y: boundaries.y + boundaries.height }
+            ];
+            const guideCorners = [
+                { x: guide.x, y: guide.y },
+                { x: guide.x + guide.width, y: guide.y },
+                { x: guide.x + guide.width, y: guide.y + guide.height },
+                { x: guide.x, y: guide.y + guide.height }
+            ];
+
+            for (let i = 0; i < corners.length; i++) {
+                const dx = Math.abs(corners[i].x - guideCorners[i].x);
+                const dy = Math.abs(corners[i].y - guideCorners[i].y);
+                if (dx > tolerance || dy > tolerance) {
+                    return false;
+                }
+            }
+            return true;
         }
     </script>
 </body>
