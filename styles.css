@@ -1,60 +1,148 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OMR Answer Sheet Checker</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>OMR Sheet Checker</h1>
-      <p>Upload answer key and scanned OMR sheets to automatically grade them</p>
-    </header>
+:root {
+  --primary: #4a6fa5;
+  --secondary: #166088;
+  --overlay-color: rgba(0, 100, 0, 0.3);
+  --overlay-border: 2px solid #00ff00;
+}
 
-    <div class="controls">
-      <div class="upload-section">
-        <h2>1. Upload Answer Key</h2>
-        <input type="file" id="keyFile" accept=".json,.txt">
-        <div id="keyInfo"></div>
-      </div>
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f5f5f5;
+}
 
-      <div class="upload-section">
-        <h2>2. Upload OMR Sheets</h2>
-        <input type="file" id="sheetImage" accept="image/*" multiple>
-        <div id="sheetInfo"></div>
-      </div>
+.container {
+  max-width: 100%;
+  padding: 15px;
+}
 
-      <div class="mode-selector">
-        <h2>Processing Mode</h2>
-        <label>
-          <input type="radio" name="mode" value="generic" checked>
-          <span>Generic OMR (Auto-detect bubbles)</span>
-        </label>
-        <label>
-          <input type="radio" name="mode" value="specific">
-          <span>Specific OMR (Fixed layout)</span>
-        </label>
-      </div>
+header {
+  text-align: center;
+  margin-bottom: 20px;
+}
 
-      <button id="processBtn" class="btn">Process Sheets</button>
-    </div>
+.scanner-container {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto 20px;
+  aspect-ratio: 8.5/11; /* Standard paper ratio */
+}
 
-    <div class="progress-container" id="progressContainer">
-      <div class="progress-bar" id="progressBar"></div>
-      <div id="progressText">0%</div>
-    </div>
+#cameraPreview {
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
 
-    <div class="results" id="results">
-      <h2>Results</h2>
-      <div id="resultContainer"></div>
-    </div>
-  </div>
+#cameraPreview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-  <canvas id="canvas"></canvas>
+#scannerOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
 
-  <script src="https://docs.opencv.org/4.9.0/opencv.js" async></script>
-  <script src="script.js"></script>
-</body>
-</html>
+.overlay-guide {
+  position: absolute;
+  border: var(--overlay-border);
+  background-color: var(--overlay-color);
+}
+
+#idOverlay {
+  top: 10%;
+  left: 70%;
+  width: 20%;
+  height: 8%;
+}
+
+#questionsOverlay {
+  top: 25%;
+  left: 10%;
+  width: 80%;
+  height: 60%;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.btn {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s;
+}
+
+.btn:hover {
+  background-color: var(--secondary);
+}
+
+.btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+#processingCanvas {
+  display: none;
+}
+
+.results {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Alignment feedback */
+.alignment-good {
+  border-color: #00ff00 !important;
+}
+
+.alignment-bad {
+  border-color: #ff0000 !important;
+}
+
+/* Flash effect */
+.flash-effect {
+  animation: flash 0.5s;
+}
+
+@keyframes flash {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Mobile specific styles */
+@media (max-width: 600px) {
+  .btn {
+    padding: 15px;
+    flex-grow: 1;
+  }
+  
+  #scannerOverlay {
+    border-width: 3px;
+  }
+}
