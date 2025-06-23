@@ -1,14 +1,17 @@
+// Global variables
 let cameraStream = null;
 let videoElement = null;
 let answerKey = [];
 let studentAnswers = [];
 let cvReady = false;
+let isScanningKey = false;
 
 // DOM elements
 const scanKeyBtn = document.getElementById('scanKeyBtn');
 const scanAnswersBtn = document.getElementById('scanAnswersBtn');
 const resetBtn = document.getElementById('resetBtn');
 const cameraView = document.getElementById('cameraView');
+const overlay = document.getElementById('overlay');
 const scoreDisplay = document.getElementById('score');
 const answerComparison = document.getElementById('answerComparison');
 
@@ -28,9 +31,15 @@ function initOpenCV() {
   });
 }
 
-// Start camera
+// Start camera with proper error handling
 async function startCamera() {
   try {
+    // Stop any existing camera stream
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+    }
+
+    // Request camera access
     cameraStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'environment',
@@ -39,18 +48,28 @@ async function startCamera() {
       }
     });
     
+    // Create video element
     videoElement = document.createElement('video');
     videoElement.srcObject = cameraStream;
     videoElement.setAttribute('playsinline', '');
-    videoElement.play();
+    videoElement.setAttribute('autoplay', '');
+    videoElement.setAttribute('muted', '');
     
+    // Wait for video to be ready
+    await new Promise((resolve) => {
+      videoElement.onloadedmetadata = () => {
+        videoElement.play().then(resolve).catch(resolve);
+      };
+    });
+    
+    // Clear and display video
     cameraView.innerHTML = '';
     cameraView.appendChild(videoElement);
     
     return true;
   } catch (error) {
     console.error('Camera error:', error);
-    alert('Could not access camera. Please ensure permissions are granted.');
+    alert(`Camera error: ${error.message}`);
     return false;
   }
 }
@@ -66,6 +85,10 @@ async function processOMR() {
   
   // Capture current frame
   ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+  
+  // Add visual feedback
+  cameraView.classList.add('flash');
+  setTimeout(() => cameraView.classList.remove('flash'), 200);
   
   // Process with OpenCV
   const src = cv.imread(canvas);
@@ -85,8 +108,8 @@ async function processOMR() {
   
   // Process 20 questions (A-E)
   const answers = [];
-  const questionSpacing = canvas.height / 21; // 20 questions with spacing
-  const optionSpacing = canvas.width / 6; // 5 options with spacing
+  const questionSpacing = canvas.height / 21;
+  const optionSpacing = canvas.width / 6;
   
   for (let q = 0; q < 20; q++) {
     let maxMarked = { val: -1, option: null };
@@ -96,7 +119,6 @@ async function processOMR() {
       const y = questionSpacing * (q + 1);
       const radius = Math.min(optionSpacing, questionSpacing) * 0.3;
       
-      // Count marked pixels in bubble area
       const bubbleArea = thresh.roi(new cv.Rect(
         x - radius,
         y - radius,
@@ -108,7 +130,7 @@ async function processOMR() {
       bubbleArea.delete();
       
       if (marked > maxMarked.val) {
-        maxMarked = { val: marked, option: String.fromCharCode(65 + o) }; // 65 = 'A'
+        maxMarked = { val: marked, option: String.fromCharCode(65 + o) };
       }
     }
     
@@ -181,35 +203,82 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Scan Answer Key
   scanKeyBtn.addEventListener('click', async () => {
     if (!cvReady) {
-      alert('OpenCV is still loading. Please wait...');
+      alert('Image processing is still loading. Please wait...');
       return;
     }
     
+    isScanningKey = true;
+    scanKeyBtn.disabled = true;
+    scanKeyBtn.textContent = 'Starting camera...';
+    
     const started = await startCamera();
-    if (!started) return;
+    if (!started) {
+      scanKeyBtn.disabled = false;
+      scanKeyBtn.textContent = '1. Scan Answer Key';
+      return;
+    }
     
     scanKeyBtn.textContent = 'Capture Answer Key';
-    scanKeyBtn.onclick = async () => {
-      answerKey = await processOMR();
-      stopCamera();
-      scanKeyBtn.textContent = 'Answer Key Scanned';
-      scanKeyBtn.disabled = true;
-      scanAnswersBtn.disabled = false;
+    scanKeyBtn.disabled = false;
+    
+    // Temporary onclick handler
+    const captureHandler = async () => {
+      try {
+        scanKeyBtn.disabled = true;
+        scanKeyBtn.textContent = 'Processing...';
+        
+        answerKey = await processOMR();
+        stopCamera();
+        
+        scanKeyBtn.textContent = '✓ Answer Key Scanned';
+        scanAnswersBtn.disabled = false;
+        isScanningKey = false;
+      } catch (error) {
+        console.error('Processing error:', error);
+        alert('Error processing answer key. Please try again.');
+        scanKeyBtn.disabled = false;
+        scanKeyBtn.textContent = 'Capture Answer Key';
+      }
     };
+    
+    scanKeyBtn.onclick = captureHandler;
   });
   
   // Scan Student Answers
   scanAnswersBtn.addEventListener('click', async () => {
+    scanAnswersBtn.disabled = true;
+    scanAnswersBtn.textContent = 'Starting camera...';
+    
     const started = await startCamera();
-    if (!started) return;
+    if (!started) {
+      scanAnswersBtn.disabled = false;
+      scanAnswersBtn.textContent = '2. Scan Student Answers';
+      return;
+    }
     
     scanAnswersBtn.textContent = 'Capture Student Answers';
-    scanAnswersBtn.onclick = async () => {
-      studentAnswers = await processOMR();
-      stopCamera();
-      scanAnswersBtn.textContent = 'Answers Scanned';
-      displayResults();
+    scanAnswersBtn.disabled = false;
+    
+    // Temporary onclick handler
+    const captureHandler = async () => {
+      try {
+        scanAnswersBtn.disabled = true;
+        scanAnswersBtn.textContent = 'Processing...';
+        
+        studentAnswers = await processOMR();
+        stopCamera();
+        
+        scanAnswersBtn.textContent = '✓ Answers Scanned';
+        displayResults();
+      } catch (error) {
+        console.error('Processing error:', error);
+        alert('Error processing answers. Please try again.');
+        scanAnswersBtn.disabled = false;
+        scanAnswersBtn.textContent = 'Capture Student Answers';
+      }
     };
+    
+    scanAnswersBtn.onclick = captureHandler;
   });
   
   // Reset
