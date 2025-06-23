@@ -3,33 +3,122 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OMR Answer Scanner</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>OMR Scanner</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    #cameraView {
+      width: 100%;
+      background: #000;
+      aspect-ratio: 3/4;
+      margin: 20px 0;
+    }
+    #cameraView video {
+      width: 100%;
+    }
+    button {
+      padding: 10px 15px;
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    button:disabled {
+      background: #ccc;
+    }
+    #status {
+      margin: 10px 0;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
-  <div class="container">
-    <h1>OMR Answer Scanner</h1>
-    
-    <div class="scanner-section">
-      <div id="cameraView"></div>
-      <div id="overlay"></div>
-    </div>
-    
-    <div class="controls">
-      <button id="scanKeyBtn" class="btn">1. Scan Answer Key</button>
-      <button id="scanAnswersBtn" class="btn" disabled>2. Scan Student Answers</button>
-      <button id="resetBtn" class="btn secondary">Reset</button>
-    </div>
-    
-    <div id="results">
-      <h2>Results: <span id="score">-</span>/20</h2>
-      <div id="answerComparison"></div>
-    </div>
-  </div>
-
-  <canvas id="processingCanvas"></canvas>
+  <h1>OMR Answer Sheet Scanner</h1>
   
-  <script src="https://docs.opencv.org/4.9.0/opencv.js" async></script>
-  <script src="scanner.js"></script>
+  <div id="cameraView"></div>
+  
+  <button id="startBtn">Start Camera</button>
+  <button id="captureBtn" disabled>Capture</button>
+  
+  <div id="status">Camera not started</div>
+  
+  <script>
+    let stream = null;
+    const startBtn = document.getElementById('startBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const statusDiv = document.getElementById('status');
+    const cameraView = document.getElementById('cameraView');
+
+    // Start camera with absolute certainty
+    async function startCamera() {
+      try {
+        statusDiv.textContent = "Starting camera...";
+        startBtn.disabled = true;
+        
+        // Stop any existing stream first
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Get camera with explicit requirements
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { min: 640, ideal: 1280 },
+            height: { min: 480, ideal: 720 }
+          },
+          audio: false
+        });
+        
+        // Create video element
+        const video = document.createElement('video');
+        video.srcObject = stream;
+        video.autoplay = true;
+        video.playsInline = true;
+        
+        // Clear previous and add new video
+        cameraView.innerHTML = '';
+        cameraView.appendChild(video);
+        
+        // Wait for video to be ready
+        await new Promise((resolve) => {
+          video.onloadedmetadata = () => {
+            video.play().then(resolve).catch(resolve);
+          };
+        });
+        
+        statusDiv.textContent = "Camera ready - point at answer sheet";
+        captureBtn.disabled = false;
+        
+      } catch (error) {
+        statusDiv.textContent = `Error: ${error.message}`;
+        startBtn.disabled = false;
+        console.error("Camera error:", error);
+      }
+    }
+
+    // Capture image
+    function captureImage() {
+      statusDiv.textContent = "Processing...";
+      captureBtn.disabled = true;
+      
+      // Simulate processing delay
+      setTimeout(() => {
+        statusDiv.textContent = "Capture complete!";
+        startBtn.disabled = false;
+        captureBtn.disabled = true;
+      }, 2000);
+    }
+
+    // Event listeners
+    startBtn.addEventListener('click', startCamera);
+    captureBtn.addEventListener('click', captureImage);
+  </script>
 </body>
 </html>
