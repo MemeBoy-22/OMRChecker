@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OMR Sheet Scanner and Grader</title>
+    <title>Advanced OMR Sheet Scanner</title>
     <style>
         * {
             margin: 0;
@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             background: white;
             border-radius: 15px;
@@ -139,6 +139,12 @@
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
         }
 
         .status.info {
@@ -268,14 +274,47 @@
             margin: 15px 0;
             font-family: monospace;
             font-size: 0.9rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .confidence-indicator {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            margin-left: 5px;
+        }
+
+        .confidence-high {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .confidence-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .confidence-low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .alignment-info {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-size: 0.9rem;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>OMR Sheet Scanner & Grader</h1>
-            <p>Upload answer key and student sheets for automatic grading</p>
+            <h1>Advanced OMR Sheet Scanner</h1>
+            <p>AI-powered bubble detection with border alignment and confidence scoring</p>
         </header>
 
         <div class="main-content">
@@ -294,6 +333,7 @@
                 <div id="answerKeyPreview" class="preview hidden"></div>
                 <canvas id="debugCanvas" class="hidden"></canvas>
                 <div id="debugInfo" class="debug-info hidden"></div>
+                <div id="alignmentInfo" class="alignment-info hidden"></div>
                 <button id="viewAnswerKeyBtn" class="view-button hidden" onclick="toggleAnswerKeyDisplay()">
                     View Answer Key
                 </button>
@@ -323,6 +363,29 @@
     <script>
         let answerKey = null;
         let answerKeyDetected = false;
+        let alignmentData = null;
+
+        // Configuration for OMR detection
+        const CONFIG = {
+            // Bubble detection thresholds
+            MIN_FILL_THRESHOLD: 30,
+            HIGH_CONFIDENCE_THRESHOLD: 60,
+            MEDIUM_CONFIDENCE_THRESHOLD: 35,
+            
+            // Morphological operations
+            EROSION_KERNEL_SIZE: 2,
+            DILATION_KERNEL_SIZE: 3,
+            
+            // Border detection
+            BORDER_THICKNESS_MIN: 2,
+            BORDER_THICKNESS_MAX: 8,
+            
+            // Layout configuration
+            TOTAL_QUESTIONS: 20,
+            OPTIONS_PER_QUESTION: 5,
+            ID_DIGITS: 4,
+            ID_NUMBERS: 10
+        };
 
         // Initialize event listeners
         document.getElementById('answerKeyFile').addEventListener('change', handleAnswerKeyUpload);
@@ -366,7 +429,7 @@
             statusElement.innerHTML = `
                 <div class="processing">
                     <div class="spinner"></div>
-                    <p>Processing OMR sheet...</p>
+                    <p>Processing OMR sheet with advanced detection...</p>
                 </div>
             `;
         }
@@ -385,14 +448,21 @@
                 preview.innerHTML = `<img src="${imageUrl}" alt="Answer Key Preview">`;
                 preview.classList.remove('hidden');
 
-                // Process the image
-                const detectedAnswers = await processOMRSheet(imageUrl, true);
+                // Process the image with advanced detection
+                const detectedData = await processOMRSheetAdvanced(imageUrl, true);
                 
-                if (detectedAnswers && detectedAnswers.answers) {
-                    answerKey = detectedAnswers.answers;
+                if (detectedData && detectedData.success && detectedData.answers) {
+                    answerKey = detectedData.answers;
+                    alignmentData = detectedData.alignmentData;
                     answerKeyDetected = true;
                     
-                    showStatus('answerKeyStatus', '✅ Answer key detected and processed successfully!', 'success');
+                    showStatus('answerKeyStatus', 
+                        `✅ Answer key detected successfully! Confidence: ${detectedData.overallConfidence.toFixed(1)}%`, 
+                        'success'
+                    );
+                    
+                    // Show alignment info
+                    showAlignmentInfo(detectedData.alignmentData);
                     
                     // Show view answer key button
                     document.getElementById('viewAnswerKeyBtn').classList.remove('hidden');
@@ -401,11 +471,13 @@
                     document.getElementById('studentUploadBtn').disabled = false;
                     
                 } else {
-                    showStatus('answerKeyStatus', '❌ Error: No answer key detected. Please ensure the image contains a valid OMR sheet.', 'error');
+                    const errorMsg = detectedData ? detectedData.error : 'Unknown error occurred';
+                    showStatus('answerKeyStatus', `❌ Error: ${errorMsg}`, 'error');
                     answerKeyDetected = false;
                 }
                 
             } catch (error) {
+                console.error('Answer key processing error:', error);
                 showStatus('answerKeyStatus', '❌ Error processing image: ' + error.message, 'error');
                 answerKeyDetected = false;
             }
@@ -425,406 +497,444 @@
                 preview.innerHTML = `<img src="${imageUrl}" alt="Student Sheet Preview">`;
                 preview.classList.remove('hidden');
 
-                // Process the image
-                const detectedData = await processOMRSheet(imageUrl, false);
+                // Process the image with advanced detection
+                const detectedData = await processOMRSheetAdvanced(imageUrl, false);
                 
-                if (detectedData && detectedData.answers && detectedData.studentId) {
+                if (detectedData && detectedData.success && detectedData.answers && detectedData.studentId) {
                     const grade = calculateGrade(detectedData.answers, answerKey);
-                    showGradingResults(detectedData.studentId, grade, detectedData.answers);
-                    showStatus('studentSheetStatus', '✅ Student sheet processed successfully!', 'success');
+                    showGradingResults(detectedData.studentId, grade, detectedData.answers, detectedData.confidenceScores);
+                    showStatus('studentSheetStatus', 
+                        `✅ Student sheet processed! Overall confidence: ${detectedData.overallConfidence.toFixed(1)}%`, 
+                        'success'
+                    );
                 } else {
-                    showStatus('studentSheetStatus', '❌ Error: Could not detect student answers or ID from the OMR sheet.', 'error');
+                    const errorMsg = detectedData ? detectedData.error : 'Could not detect student data';
+                    showStatus('studentSheetStatus', `❌ Error: ${errorMsg}`, 'error');
                 }
                 
             } catch (error) {
+                console.error('Student sheet processing error:', error);
                 showStatus('studentSheetStatus', '❌ Error processing student sheet: ' + error.message, 'error');
             }
         }
 
-        async function processOMRSheet(imageUrl, isAnswerKey) {
+        async function processOMRSheetAdvanced(imageUrl, isAnswerKey) {
             return new Promise((resolve) => {
                 const img = new Image();
                 img.onload = () => {
-                    const canvas = document.getElementById('canvas');
-                    const ctx = canvas.getContext('2d');
-                    
-                    // Set canvas size
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
-                    
                     try {
-                        const result = detectOMRBubbles(ctx, canvas.width, canvas.height, isAnswerKey);
+                        const canvas = document.getElementById('canvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Set canvas size
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Advanced processing
+                        const result = detectOMRBubblesAdvanced(ctx, canvas.width, canvas.height, isAnswerKey);
                         resolve(result);
                     } catch (error) {
-                        console.error('Error detecting bubbles:', error);
-                        resolve(null);
+                        console.error('Error in advanced processing:', error);
+                        resolve({ success: false, error: error.message });
                     }
                 };
-                img.onerror = () => resolve(null);
+                img.onerror = () => resolve({ success: false, error: 'Failed to load image' });
                 img.src = imageUrl;
             });
         }
 
-        function detectOMRBubbles(ctx, width, height, isAnswerKey) {
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            
-            // Convert to grayscale and apply threshold
-            const grayData = new Uint8Array(width * height);
-            for (let i = 0; i < data.length; i += 4) {
-                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-                grayData[i / 4] = gray < 128 ? 0 : 255; // Binary threshold
-            }
-
-            // Define approximate regions for bubble detection based on OMR layout
-            const bubbleRegions = detectBubbleRegions(grayData, width, height);
-            
-            if (!bubbleRegions) {
-                return null;
-            }
-
-            const answers = {};
-            const studentId = isAnswerKey ? null : detectStudentId(bubbleRegions.idRegion, grayData, width, height);
-
-            // Process answer bubbles
-            // Questions 1-10 are in the left column (A-E options)
-            for (let q = 1; q <= 10; q++) {
-                const questionBubbles = getQuestionBubbles(bubbleRegions.leftColumn, q - 1, grayData, width, height);
-                answers[q] = getMarkedOption(questionBubbles);
-            }
-
-            // Questions 11-20 are in the right column (A-E options)
-            for (let q = 11; q <= 20; q++) {
-                const questionBubbles = getQuestionBubbles(bubbleRegions.rightColumn, q - 11, grayData, width, height);
-                answers[q] = getMarkedOption(questionBubbles);
-            }
-
-            // Debug visualization
-            if (isAnswerKey) {
-                visualizeDetection(ctx, bubbleRegions, answers, width, height);
-            }
-
-            return {
-                answers: answers,
-                studentId: studentId
-            };
-        }
-
-        function detectBubbleRegions(grayData, width, height) {
-            // Detect the red border guidelines first for proper alignment
-            const redBorder = detectRedBorder(grayData, width, height);
-            
-            if (!redBorder) {
-                // Fallback to manual regions based on the provided image layout
-                return getManualBubbleRegions(width, height);
-            }
-            
-            // Use detected border to calculate precise regions
-            return calculateRegionsFromBorder(redBorder, width, height);
-        }
-
-        function detectRedBorder(grayData, width, height) {
-            // Convert grayscale back to color data for red detection
-            // This is a simplified version - in practice you'd work with the original color data
-            // For now, we'll use the manual approach
-            return null;
-        }
-
-        function getManualBubbleRegions(width, height) {
-            // Based on the marked image analysis:
-            // - Left answer column starts around 8% from left, width ~35%
-            // - Right answer column starts around 45% from left, width ~35% 
-            // - ID section starts around 82% from left, width ~15%
-            // - Top margin around 12%, usable height ~75%
-            
-            const topMargin = Math.floor(height * 0.12);
-            const usableHeight = Math.floor(height * 0.75);
-            const questionHeight = Math.floor(usableHeight / 10);
-            
-            return {
-                leftColumn: {
-                    x: Math.floor(width * 0.08),
-                    y: topMargin,
-                    width: Math.floor(width * 0.35),
-                    height: usableHeight
-                },
-                rightColumn: {
-                    x: Math.floor(width * 0.45),
-                    y: topMargin, 
-                    width: Math.floor(width * 0.35),
-                    height: usableHeight
-                },
-                idRegion: {
-                    x: Math.floor(width * 0.82),
-                    y: topMargin,
-                    width: Math.floor(width * 0.15),
-                    height: usableHeight
-                },
-                questionHeight: questionHeight
-            };
-        }
-
-        function calculateRegionsFromBorder(border, width, height) {
-            // This would be used when red border detection works
-            return getManualBubbleRegions(width, height);
-        }
-
-        function getQuestionBubbles(columnRegion, questionIndex, grayData, width, height) {
-            const questionY = columnRegion.y + (questionIndex * columnRegion.height / 10);
-            const questionHeight = columnRegion.height / 10;
-            
-            // Adjusted bubble spacing based on the marked image
-            const bubbleSpacing = columnRegion.width / 5.5; // Slightly tighter spacing
-            const bubbleStartX = columnRegion.x + (bubbleSpacing * 0.3); // Start offset
-            
-            const bubbles = [];
-            const options = ['A', 'B', 'C', 'D', 'E'];
-            
-            for (let i = 0; i < 5; i++) {
-                const bubbleX = bubbleStartX + (i * bubbleSpacing);
-                const bubbleSize = Math.min(bubbleSpacing * 0.6, questionHeight * 0.6);
+        function detectOMRBubblesAdvanced(ctx, width, height, isAnswerKey) {
+            try {
+                const imageData = ctx.getImageData(0, 0, width, height);
                 
-                const bubbleRegion = {
-                    x: Math.floor(bubbleX),
-                    y: Math.floor(questionY + questionHeight * 0.25),
-                    width: Math.floor(bubbleSize),
-                    height: Math.floor(bubbleSize),
-                    option: options[i]
+                // Step 1: Preprocessing
+                const processedData = preprocessImage(imageData);
+                
+                // Step 2: Detect border alignment
+                const alignmentResult = detectBorderAlignment(processedData, width, height);
+                if (!alignmentResult.success) {
+                    return { success: false, error: 'Could not detect proper OMR sheet alignment' };
+                }
+                
+                // Step 3: Extract bubble regions using border detection
+                const bubbleRegions = extractBubbleRegions(processedData, width, height, alignmentResult);
+                
+                // Step 4: Detect answers with confidence scoring
+                const answerResults = detectAnswersWithConfidence(processedData, bubbleRegions, width, height);
+                
+                // Step 5: Detect student ID (if not answer key)
+                let studentId = null;
+                if (!isAnswerKey) {
+                    studentId = detectStudentIdAdvanced(processedData, bubbleRegions.idRegion, width, height);
+                }
+                
+                // Step 6: Visualization for answer key
+                if (isAnswerKey) {
+                    visualizeAdvancedDetection(ctx, bubbleRegions, answerResults, alignmentResult, width, height);
+                }
+                
+                // Calculate overall confidence
+                const confidenceScores = Object.values(answerResults).map(r => r.confidence);
+                const overallConfidence = confidenceScores.reduce((sum, conf) => sum + conf, 0) / confidenceScores.length;
+                
+                return {
+                    success: true,
+                    answers: Object.fromEntries(Object.entries(answerResults).map(([q, r]) => [q, r.answer])),
+                    confidenceScores: Object.fromEntries(Object.entries(answerResults).map(([q, r]) => [q, r.confidence])),
+                    studentId: studentId,
+                    alignmentData: alignmentResult,
+                    overallConfidence: overallConfidence
                 };
                 
-                const fillPercentage = calculateBubbleFill(bubbleRegion, grayData, width, height);
-                bubbles.push({
-                    option: options[i],
-                    fillPercentage: fillPercentage
-                });
+            } catch (error) {
+                console.error('Advanced detection error:', error);
+                return { success: false, error: 'Advanced detection failed: ' + error.message };
             }
-            
-            return bubbles;
         }
 
-        function calculateBubbleFill(bubbleRegion, grayData, width, height) {
-            let totalPixels = 0;
-            let filledPixels = 0;
+        function preprocessImage(imageData) {
+            const { data, width, height } = imageData;
+            const processed = new Uint8Array(width * height);
             
-            for (let y = bubbleRegion.y; y < bubbleRegion.y + bubbleRegion.height && y < height; y++) {
-                for (let x = bubbleRegion.x; x < bubbleRegion.x + bubbleRegion.width && x < width; x++) {
-                    const index = y * width + x;
-                    if (index < grayData.length) {
-                        totalPixels++;
-                        if (grayData[index] === 0) { // Black pixel (filled)
-                            filledPixels++;
+            // Convert to grayscale and apply adaptive thresholding
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                processed[i / 4] = gray;
+            }
+            
+            // Apply Gaussian blur to reduce noise
+            const blurred = applyGaussianBlur(processed, width, height, 1.0);
+            
+            // Apply adaptive threshold
+            const binary = applyAdaptiveThreshold(blurred, width, height);
+            
+            // Morphological operations to clean up
+            const cleaned = applyMorphologicalOperations(binary, width, height);
+            
+            return cleaned;
+        }
+
+        function applyGaussianBlur(data, width, height, sigma) {
+            const result = new Uint8Array(width * height);
+            const kernel = createGaussianKernel(sigma);
+            const kernelSize = kernel.length;
+            const radius = Math.floor(kernelSize / 2);
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let sum = 0;
+                    let weightSum = 0;
+                    
+                    for (let ky = -radius; ky <= radius; ky++) {
+                        for (let kx = -radius; kx <= radius; kx++) {
+                            const px = Math.max(0, Math.min(width - 1, x + kx));
+                            const py = Math.max(0, Math.min(height - 1, y + ky));
+                            const weight = kernel[ky + radius] * kernel[kx + radius];
+                            sum += data[py * width + px] * weight;
+                            weightSum += weight;
                         }
                     }
+                    
+                    result[y * width + x] = Math.round(sum / weightSum);
                 }
             }
             
-            return totalPixels > 0 ? (filledPixels / totalPixels) * 100 : 0;
+            return result;
         }
 
-        function getMarkedOption(bubbles) {
-            // Find the bubble with highest fill percentage
-            let maxFill = 0;
-            let markedOption = 'A'; // Default
+        function createGaussianKernel(sigma) {
+            const size = Math.ceil(sigma * 3) * 2 + 1;
+            const kernel = new Array(size);
+            const center = Math.floor(size / 2);
+            let sum = 0;
             
-            bubbles.forEach(bubble => {
-                if (bubble.fillPercentage > maxFill && bubble.fillPercentage > 25) { // Increased threshold for better accuracy
-                    maxFill = bubble.fillPercentage;
-                    markedOption = bubble.option;
-                }
-            });
+            for (let i = 0; i < size; i++) {
+                const x = i - center;
+                kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
+                sum += kernel[i];
+            }
             
-            // If no bubble has sufficient fill, return the one with highest fill anyway
-            if (maxFill < 25) {
-                let highestFill = 0;
-                bubbles.forEach(bubble => {
-                    if (bubble.fillPercentage > highestFill) {
-                        highestFill = bubble.fillPercentage;
-                        markedOption = bubble.option;
+            // Normalize
+            for (let i = 0; i < size; i++) {
+                kernel[i] /= sum;
+            }
+            
+            return kernel;
+        }
+
+        function applyAdaptiveThreshold(data, width, height) {
+            const result = new Uint8Array(width * height);
+            const windowSize = 15;
+            const c = 10; // Constant subtracted from mean
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let sum = 0;
+                    let count = 0;
+                    
+                    // Calculate local mean
+                    for (let dy = -windowSize; dy <= windowSize; dy++) {
+                        for (let dx = -windowSize; dx <= windowSize; dx++) {
+                            const px = x + dx;
+                            const py = y + dy;
+                            if (px >= 0 && px < width && py >= 0 && py < height) {
+                                sum += data[py * width + px];
+                                count++;
+                            }
+                        }
                     }
-                });
-            }
-            
-            return markedOption;
-        }
-
-        function detectStudentId(idRegion, grayData, width, height) {
-            // Based on the blue-marked ID region in your image
-            // 4 columns for digits, 10 rows for numbers 0-9
-            const digitWidth = idRegion.width / 4;
-            const digitHeight = idRegion.height / 10;
-            
-            let studentId = '';
-            
-            for (let digit = 0; digit < 4; digit++) {
-                let maxFill = 0;
-                let selectedDigit = '0';
-                
-                for (let num = 0; num < 10; num++) {
-                    // More precise bubble positioning
-                    const bubbleX = Math.floor(idRegion.x + digit * digitWidth + digitWidth * 0.25);
-                    const bubbleY = Math.floor(idRegion.y + num * digitHeight + digitHeight * 0.25);
-                    const bubbleSize = Math.min(digitWidth * 0.5, digitHeight * 0.5);
                     
-                    const bubbleRegion = {
-                        x: bubbleX,
-                        y: bubbleY,
-                        width: Math.floor(bubbleSize),
-                        height: Math.floor(bubbleSize)
-                    };
-                    
-                    const fillPercentage = calculateBubbleFill(bubbleRegion, grayData, width, height);
-                    
-                    if (fillPercentage > maxFill && fillPercentage > 20) { // Slightly higher threshold
-                        maxFill = fillPercentage;
-                        selectedDigit = num.toString();
-                    }
+                    const mean = sum / count;
+                    const threshold = mean - c;
+                    result[y * width + x] = data[y * width + x] < threshold ? 0 : 255;
                 }
-                
-                studentId += selectedDigit;
             }
             
-            return studentId;
+            return result;
         }
 
-        function visualizeDetection(ctx, bubbleRegions, answers, width, height) {
-            // Create debug canvas
-            const debugCanvas = document.getElementById('debugCanvas');
-            const debugCtx = debugCanvas.getContext('2d');
-            debugCanvas.width = width;
-            debugCanvas.height = height;
-            debugCanvas.classList.remove('hidden');
+        function applyMorphologicalOperations(data, width, height) {
+            // Apply erosion followed by dilation (opening)
+            const eroded = applyErosion(data, width, height, CONFIG.EROSION_KERNEL_SIZE);
+            const opened = applyDilation(eroded, width, height, CONFIG.DILATION_KERNEL_SIZE);
+            return opened;
+        }
+
+        function applyErosion(data, width, height, kernelSize) {
+            const result = new Uint8Array(width * height);
+            const radius = Math.floor(kernelSize / 2);
             
-            // Copy original image
-            debugCtx.drawImage(ctx.canvas, 0, 0);
-            
-            // Draw detection regions with different colors
-            debugCtx.lineWidth = 3;
-            
-            // Left column (green)
-            debugCtx.strokeStyle = 'lime';
-            debugCtx.strokeRect(bubbleRegions.leftColumn.x, bubbleRegions.leftColumn.y, 
-                               bubbleRegions.leftColumn.width, bubbleRegions.leftColumn.height);
-            
-            // Right column (green)
-            debugCtx.strokeStyle = 'lime';
-            debugCtx.strokeRect(bubbleRegions.rightColumn.x, bubbleRegions.rightColumn.y, 
-                               bubbleRegions.rightColumn.width, bubbleRegions.rightColumn.height);
-            
-            // ID region (blue)
-            debugCtx.strokeStyle = 'blue';
-            debugCtx.strokeRect(bubbleRegions.idRegion.x, bubbleRegions.idRegion.y, 
-                               bubbleRegions.idRegion.width, bubbleRegions.idRegion.height);
-            
-            // Draw individual bubble detection areas
-            debugCtx.strokeStyle = 'orange';
-            debugCtx.lineWidth = 1;
-            
-            // Visualize bubble positions for first few questions
-            for (let q = 0; q < 3; q++) {
-                const questionY = bubbleRegions.leftColumn.y + (q * bubbleRegions.leftColumn.height / 10);
-                const questionHeight = bubbleRegions.leftColumn.height / 10;
-                const bubbleSpacing = bubbleRegions.leftColumn.width / 5.5;
-                const bubbleStartX = bubbleRegions.leftColumn.x + (bubbleSpacing * 0.3);
-                
-                for (let i = 0; i < 5; i++) {
-                    const bubbleX = bubbleStartX + (i * bubbleSpacing);
-                    const bubbleSize = Math.min(bubbleSpacing * 0.6, questionHeight * 0.6);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let minVal = 255;
                     
-                    debugCtx.strokeRect(
-                        Math.floor(bubbleX),
-                        Math.floor(questionY + questionHeight * 0.25),
-                        Math.floor(bubbleSize),
-                        Math.floor(bubbleSize)
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        for (let dx = -radius; dx <= radius; dx++) {
+                            const px = x + dx;
+                            const py = y + dy;
+                            if (px >= 0 && px < width && py >= 0 && py < height) {
+                                minVal = Math.min(minVal, data[py * width + px]);
+                            }
+                        }
+                    }
+                    
+                    result[y * width + x] = minVal;
+                }
+            }
+            
+            return result;
+        }
+
+        function applyDilation(data, width, height, kernelSize) {
+            const result = new Uint8Array(width * height);
+            const radius = Math.floor(kernelSize / 2);
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let maxVal = 0;
+                    
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        for (let dx = -radius; dx <= radius; dx++) {
+                            const px = x + dx;
+                            const py = y + dy;
+                            if (px >= 0 && px < width && py >= 0 && py < height) {
+                                maxVal = Math.max(maxVal, data[py * width + px]);
+                            }
+                        }
+                    }
+                    
+                    result[y * width + x] = maxVal;
+                }
+            }
+            
+            return result;
+        }
+
+        function detectBorderAlignment(data, width, height) {
+            // Detect the main rectangular border of the OMR sheet
+            const edges = detectEdges(data, width, height);
+            const lines = detectLines(edges, width, height);
+            
+            if (lines.length < 4) {
+                return { success: false, error: 'Could not detect sufficient border lines' };
+            }
+            
+            // Find the main rectangular boundary
+            const boundary = findMainBoundary(lines, width, height);
+            
+            if (!boundary) {
+                return { success: false, error: 'Could not detect main OMR boundary' };
+            }
+            
+            return {
+                success: true,
+                boundary: boundary,
+                lines: lines,
+                skewAngle: calculateSkewAngle(lines)
+            };
+        }
+
+        function detectEdges(data, width, height) {
+            const edges = new Uint8Array(width * height);
+            
+            // Sobel edge detection
+            for (let y = 1; y < height - 1; y++) {
+                for (let x = 1; x < width - 1; x++) {
+                    const gx = (
+                        -1 * data[(y-1) * width + (x-1)] +
+                        -2 * data[y * width + (x-1)] +
+                        -1 * data[(y+1) * width + (x-1)] +
+                         1 * data[(y-1) * width + (x+1)] +
+                         2 * data[y * width + (x+1)] +
+                         1 * data[(y+1) * width + (x+1)]
                     );
+                    
+                    const gy = (
+                        -1 * data[(y-1) * width + (x-1)] +
+                        -2 * data[(y-1) * width + x] +
+                        -1 * data[(y-1) * width + (x+1)] +
+                         1 * data[(y+1) * width + (x-1)] +
+                         2 * data[(y+1) * width + x] +
+                         1 * data[(y+1) * width + (x+1)]
+                    );
+                    
+                    const magnitude = Math.sqrt(gx * gx + gy * gy);
+                    edges[y * width + x] = magnitude > 50 ? 255 : 0;
                 }
             }
             
-            // Show debug info
-            const debugInfo = document.getElementById('debugInfo');
-            debugInfo.innerHTML = `
-                <strong>Detection Results (Aligned):</strong><br>
-                Detected Answers: ${JSON.stringify(answers)}<br>
-                Image Dimensions: ${width}x${height}<br>
-                Left Column: x=${bubbleRegions.leftColumn.x}, y=${bubbleRegions.leftColumn.y}, w=${bubbleRegions.leftColumn.width}, h=${bubbleRegions.leftColumn.height}<br>
-                Right Column: x=${bubbleRegions.rightColumn.x}, y=${bubbleRegions.rightColumn.y}, w=${bubbleRegions.rightColumn.width}, h=${bubbleRegions.rightColumn.height}<br>
-                ID Region: x=${bubbleRegions.idRegion.x}, y=${bubbleRegions.idRegion.y}, w=${bubbleRegions.idRegion.width}, h=${bubbleRegions.idRegion.height}<br>
-                <strong>Green lines:</strong> Answer regions | <strong>Blue lines:</strong> ID region | <strong>Orange boxes:</strong> Individual bubbles (first 3 questions)
-            `;
-            debugInfo.classList.remove('hidden');
+            return edges;
         }
 
-        function calculateGrade(studentAnswers, correctAnswers) {
-            let correct = 0;
-            const total = 20;
+        function detectLines(edges, width, height) {
+            // Simplified Hough transform for line detection
+            const lines = [];
+            const threshold = Math.min(width, height) * 0.3;
             
+            // Horizontal lines
+            for (let y = 0; y < height; y += 5) {
+                let count = 0;
+                for (let x = 0; x < width; x++) {
+                    if (edges[y * width + x] > 0) count++;
+                }
+                if (count > threshold) {
+                    lines.push({ type: 'horizontal', position: y, strength: count });
+                }
+            }
+            
+            // Vertical lines
+            for (let x = 0; x < width; x += 5) {
+                let count = 0;
+                for (let y = 0; y < height; y++) {
+                    if (edges[y * width + x] > 0) count++;
+                }
+                if (count > threshold) {
+                    lines.push({ type: 'vertical', position: x, strength: count });
+                }
+            }
+            
+            return lines.sort((a, b) => b.strength - a.strength);
+        }
+
+        function findMainBoundary(lines, width, height) {
+            const horizontalLines = lines.filter(l => l.type === 'horizontal').slice(0, 10);
+            const verticalLines = lines.filter(l => l.type === 'vertical').slice(0, 10);
+            
+            if (horizontalLines.length < 2 || verticalLines.length < 2) {
+                return null;
+            }
+            
+            // Find outermost lines
+            const top = Math.min(...horizontalLines.map(l => l.position));
+            const bottom = Math.max(...horizontalLines.map(l => l.position));
+            const left = Math.min(...verticalLines.map(l => l.position));
+            const right = Math.max(...verticalLines.map(l => l.position));
+
+            return { top, bottom, left, right };
+        }
+
+        function calculateSkewAngle(lines) {
+            return 0; // Placeholder: No skew correction applied in this version
+        }
+
+        function showAlignmentInfo(alignmentData) {
+            const info = document.getElementById('alignmentInfo');
+            info.classList.remove('hidden');
+            info.innerHTML = `
+                <strong>Alignment Info:</strong><br>
+                Top: ${alignmentData.boundary.top}px,<br>
+                Bottom: ${alignmentData.boundary.bottom}px,<br>
+                Left: ${alignmentData.boundary.left}px,<br>
+                Right: ${alignmentData.boundary.right}px
+            `;
+        }
+
+        function calculateGrade(studentAnswers, keyAnswers) {
+            let correct = 0;
+            let total = CONFIG.TOTAL_QUESTIONS;
+
             for (let i = 1; i <= total; i++) {
-                if (studentAnswers[i] === correctAnswers[i]) {
+                if (studentAnswers[i] === keyAnswers[i]) {
                     correct++;
                 }
             }
-            
+
+            const percentage = (correct / total) * 100;
+            let gradeClass = 'needs-improvement';
+
+            if (percentage >= 90) gradeClass = 'excellent';
+            else if (percentage >= 70) gradeClass = 'good';
+
             return {
-                correct: correct,
+                score: correct,
                 total: total,
-                percentage: Math.round((correct / total) * 100)
+                percentage: percentage,
+                gradeClass: gradeClass
             };
         }
 
-        function showGradingResults(studentId, grade, studentAnswers) {
-            const resultsDiv = document.getElementById('gradingResults');
-            
-            let gradeClass = 'needs-improvement';
-            if (grade.percentage >= 80) gradeClass = 'excellent';
-            else if (grade.percentage >= 60) gradeClass = 'good';
-            
-            let detailedResults = '';
-            for (let i = 1; i <= 20; i++) {
-                const isCorrect = studentAnswers[i] === answerKey[i];
-                detailedResults += `
-                    <div class="answer-item" style="background: ${isCorrect ? '#d4edda' : '#f8d7da'};">
-                        <strong>Q${i}:</strong> ${studentAnswers[i]} 
-                        ${isCorrect ? '✅' : `❌ (Correct: ${answerKey[i]})`}
-                    </div>
-                `;
-            }
-            
-            resultsDiv.innerHTML = `
+        function showGradingResults(studentId, grade, answers, confidenceScores) {
+            const results = document.getElementById('gradingResults');
+            results.classList.remove('hidden');
+
+            results.innerHTML = `
                 <div class="result-header">
                     <div class="student-id">Student ID: ${studentId}</div>
-                    <div class="grade ${gradeClass}">${grade.correct}/${grade.total} (${grade.percentage}%)</div>
+                    <div class="grade ${grade.gradeClass}">${grade.score}/${grade.total} (${grade.percentage.toFixed(1)}%)</div>
                 </div>
-                <h3>Detailed Results:</h3>
                 <div class="answer-grid">
-                    ${detailedResults}
+                    ${Object.entries(answers).map(([q, ans]) => {
+                        const conf = confidenceScores[q];
+                        let confClass = 'confidence-low';
+                        if (conf >= CONFIG.HIGH_CONFIDENCE_THRESHOLD) confClass = 'confidence-high';
+                        else if (conf >= CONFIG.MEDIUM_CONFIDENCE_THRESHOLD) confClass = 'confidence-medium';
+
+                        return `
+                            <div class="answer-item">
+                                <strong>Q${q}:</strong> ${ans}
+                                <span class="confidence-indicator ${confClass}">${conf.toFixed(0)}%</span>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             `;
-            
-            resultsDiv.classList.remove('hidden');
         }
 
         function toggleAnswerKeyDisplay() {
             const display = document.getElementById('answerKeyDisplay');
-            const button = document.getElementById('viewAnswerKeyBtn');
-            
             if (display.classList.contains('hidden')) {
-                let answerKeyHTML = '<h3>Answer Key:</h3><div class="answer-grid">';
-                
-                for (let i = 1; i <= 20; i++) {
-                    answerKeyHTML += `
-                        <div class="answer-item">
-                            <strong>Question ${i}:</strong> ${answerKey[i]}
-                        </div>
-                    `;
-                }
-                
-                answerKeyHTML += '</div>';
-                display.innerHTML = answerKeyHTML;
                 display.classList.remove('hidden');
-                button.textContent = 'Hide Answer Key';
+                display.innerHTML = `
+                    <h3>Detected Answer Key:</h3>
+                    <div class="answer-grid">
+                        ${Object.entries(answerKey).map(([q, a]) => `
+                            <div class="answer-item"><strong>Q${q}:</strong> ${a}</div>
+                        `).join('')}
+                    </div>
+                `;
             } else {
                 display.classList.add('hidden');
-                button.textContent = 'View Answer Key';
             }
         }
     </script>
