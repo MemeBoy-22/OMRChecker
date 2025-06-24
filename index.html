@@ -493,6 +493,18 @@
             font-weight: 500;
         }
 
+        .debug-info {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #ffc107;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
@@ -553,6 +565,10 @@
             </div>
 
             <div class="results-section">
+                <div id="debugInfo" class="debug-info" style="display: none;">
+                    <div id="debugOutput"></div>
+                </div>
+
                 <div id="answerKeySection" class="result-card" style="display: none;">
                     <div class="result-header">📋 Answer Key</div>
                     <div id="answerKeyDisplay" class="answer-key-display"></div>
@@ -606,12 +622,7 @@
     </div>
 
     <script>
-        // Enhanced OMR Scanner with improved algorithms and UI
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !HTMLCanvasElement.prototype.getContext) {
-            alert('⚠️ This browser does not support required APIs. Please use Chrome, Firefox, or Safari.');
-            throw new Error('Unsupported browser');
-        }
-
+        // Enhanced OMR Scanner with improved error handling and debugging
         let video, canvas, ctx, processCanvas, processCtx, overlaySvg;
         let isAnswerKeyMode = true;
         let answerKey = null;
@@ -619,7 +630,7 @@
         let isAligned = false;
         let lastBoundaries = null;
         let stableFrames = 0;
-        const STABILITY_THRESHOLD = 8; // Increased for better stability
+        const STABILITY_THRESHOLD = 8;
 
         const OMR_CONFIG = {
             questions: 20,
@@ -628,154 +639,253 @@
             idDigits: 4
         };
 
+        // Debug logging function
+        function debugLog(message) {
+            console.log(message);
+            const debugOutput = document.getElementById('debugOutput');
+            if (debugOutput) {
+                debugOutput.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+                debugOutput.scrollTop = debugOutput.scrollHeight;
+            }
+        }
+
+        // Show debug panel
+        function showDebug() {
+            document.getElementById('debugInfo').style.display = 'block';
+        }
+
+        // Error display function
+        function showError(message) {
+            console.error(message);
+            debugLog('ERROR: ' + message);
+            showDebug();
+            
+            // Remove existing messages
+            const existing = document.querySelectorAll('.error-message');
+            existing.forEach(el => el.remove());
+            
+            // Create new error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            document.querySelector('.results-section').insertBefore(errorDiv, document.querySelector('.results-section').firstChild);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => errorDiv.remove(), 10000);
+        }
+
+        // Success display function
+        function showSuccess(message) {
+            console.log(message);
+            debugLog('SUCCESS: ' + message);
+            
+            // Remove existing messages
+            const existing = document.querySelectorAll('.success-message');
+            existing.forEach(el => el.remove());
+            
+            // Create new success message
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message';
+            successDiv.textContent = message;
+            document.querySelector('.results-section').insertBefore(successDiv, document.querySelector('.results-section').firstChild);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => successDiv.remove(), 5000);
+        }
+
+        // Check browser compatibility
+        function checkBrowserSupport() {
+            debugLog('Checking browser support...');
+            
+            if (!navigator.mediaDevices) {
+                showError('❌ navigator.mediaDevices not supported');
+                return false;
+            }
+            
+            if (!navigator.mediaDevices.getUserMedia) {
+                showError('❌ getUserMedia not supported');
+                return false;
+            }
+            
+            if (!HTMLCanvasElement.prototype.getContext) {
+                showError('❌ Canvas not supported');
+                return false;
+            }
+            
+            debugLog('Browser support: OK');
+            return true;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             try {
+                debugLog('Initializing application...');
+                
+                if (!checkBrowserSupport()) {
+                    return;
+                }
+                
                 initializeElements();
                 setupEventListeners();
                 checkCameraAvailability();
-                startAlignmentCheck();
+                
+                debugLog('Application initialized successfully');
             } catch (error) {
                 console.error('Initialization failed:', error);
-                showError('❌ Application failed to load. Check console for details.');
+                showError('❌ Application failed to load: ' + error.message);
             }
         });
 
         function initializeElements() {
+            debugLog('Initializing DOM elements...');
+            
             video = document.getElementById('video');
             canvas = document.getElementById('canvas');
             ctx = canvas.getContext('2d');
             processCanvas = document.getElementById('processCanvas');
             processCtx = processCanvas.getContext('2d');
             overlaySvg = document.getElementById('overlaySvg');
+            
+            if (!video || !canvas || !ctx || !processCanvas || !processCtx || !overlaySvg) {
+                throw new Error('Failed to initialize required DOM elements');
+            }
+            
+            debugLog('DOM elements initialized successfully');
         }
 
         function setupEventListeners() {
-            document.getElementById('startCamera').addEventListener('click', async () => {
-                const hasPermission = await checkCameraPermissions();
-                if (hasPermission) await startCamera();
+            debugLog('Setting up event listeners...');
+            
+            const startBtn = document.getElementById('startCamera');
+            const answerKeyBtn = document.getElementById('setAnswerKey');
+            const evaluateBtn = document.getElementById('evaluateMode');
+            
+            if (!startBtn || !answerKeyBtn || !evaluateBtn) {
+                throw new Error('Required buttons not found');
+            }
+            
+            startBtn.addEventListener('click', async () => {
+                debugLog('Start camera button clicked');
+                try {
+                    const hasPermission = await checkCameraPermissions();
+                    if (hasPermission) {
+                        await startCamera();
+                    }
+                } catch (error) {
+                    showError('Camera start failed: ' + error.message);
+                }
             });
 
-            document.getElementById('setAnswerKey').addEventListener('click', () => {
+            answerKeyBtn.addEventListener('click', () => {
+                debugLog('Answer key mode selected');
                 setMode(true);
             });
 
-            document.getElementById('evaluateMode').addEventListener('click', () => {
+            evaluateBtn.addEventListener('click', () => {
+                debugLog('Evaluate mode selected');
                 setMode(false);
             });
+            
+            debugLog('Event listeners set up successfully');
         }
 
         async function checkCameraAvailability() {
             try {
+                debugLog('Checking camera availability...');
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const cameras = devices.filter(device => device.kind === 'videoinput');
-                console.log('📹 Available cameras:', cameras.length);
-                if (cameras.length === 0) showError('❌ No cameras detected on this device.');
+                debugLog(`Found ${cameras.length} camera(s)`);
+                
+                if (cameras.length === 0) {
+                    showError('❌ No cameras detected on this device.');
+                    return false;
+                }
+                
+                // Log camera details
+                cameras.forEach((camera, index) => {
+                    debugLog(`Camera ${index + 1}: ${camera.label || 'Unknown'} (${camera.deviceId.substring(0, 8)}...)`);
+                });
+                
+                return true;
             } catch (error) {
-                console.warn('Could not enumerate devices:', error);
-                showError('⚠️ Unable to check camera availability.');
+                debugLog('Could not enumerate devices: ' + error.message);
+                showError('⚠️ Unable to check camera availability: ' + error.message);
+                return false;
             }
         }
 
         async function checkCameraPermissions() {
             try {
+                debugLog('Checking camera permissions...');
+                
                 if ('permissions' in navigator) {
                     const permission = await navigator.permissions.query({ name: 'camera' });
-                    console.log('🔐 Camera permission status:', permission.state);
+                    debugLog('Camera permission status: ' + permission.state);
+                    
                     if (permission.state === 'denied') {
                         showError('❌ Camera permission denied. Please enable in browser settings.');
                         return false;
                     }
                 }
+                
                 return true;
             } catch (error) {
-                console.warn('Could not check permissions:', error);
-                return true;
+                debugLog('Could not check permissions: ' + error.message);
+                return true; // Assume allowed if we can't check
             }
         }
 
         async function startCamera() {
             try {
+                debugLog('Starting camera...');
+                
+                // Stop existing stream
                 if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
+                    debugLog('Stopping existing stream...');
+                    stream.getTracks().forEach(track => {
+                        track.stop();
+                        debugLog('Stopped track: ' + track.kind);
+                    });
                     stream = null;
                 }
 
-                const constraints = { 
-                    video: { 
-                        facingMode: 'environment', 
-                        width: { ideal: 1280 }, 
-                        height: { ideal: 720 } 
-                    } 
-                };
+                // Try different constraint sets
+                const constraintSets = [
+                    { 
+                        video: { 
+                            facingMode: 'environment', 
+                            width: { ideal: 1280 }, 
+                            height: { ideal: 720 } 
+                        } 
+                    },
+                    { 
+                        video: { 
+                            facingMode: 'environment',
+                            width: { ideal: 640 }, 
+                            height: { ideal: 480 } 
+                        } 
+                    },
+                    { 
+                        video: { 
+                            width: { ideal: 1280 }, 
+                            height: { ideal: 720 } 
+                        } 
+                    },
+                    { 
+                        video: { 
+                            width: { ideal: 640 }, 
+                            height: { ideal: 480 } 
+                        } 
+                    },
+                    { video: true }
+                ];
                 
-                console.log('📱 Starting camera with constraints:', constraints);
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-
-                await new Promise((resolve, reject) => {
-                    video.onloadedmetadata = resolve;
-                    video.onerror = reject;
-                    setTimeout(() => reject(new Error('Video load timeout')), 10000);
-                });
-
-                await video.play();
-
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                processCanvas.width = canvas.width;
-                processCanvas.height = canvas.height;
-
-                updateOverlay();
-                console.log('📐 Video dimensions:', canvas.width, 'x', canvas.height);
-
-                const startBtn = document.getElementById('startCamera');
-                startBtn.textContent = '✅ Camera Active';
-                startBtn.style.background = 'linear-gradient(135deg, #28a745, #1e7e34)';
-                startBtn.disabled = true;
-                showSuccess(`📹 Camera started successfully (${canvas.width}x${canvas.height})`);
-            } catch (error) {
-                console.error('Camera error:', error);
-                let message = '❌ Camera access failed: ';
-                if (error.name === 'NotAllowedError') message += 'Permission denied. Please allow camera access.';
-                else if (error.name === 'NotFoundError') message += 'No camera found.';
-                else if (error.name === 'NotReadableError') message += 'Camera in use by another application.';
-                else message += error.message;
-                showError(message);
+                let lastError = null;
                 
-                const startBtn = document.getElementById('startCamera');
-                startBtn.textContent = '🔄 Retry Camera';
-                startBtn.style.background = 'linear-gradient(135deg, #dc3545, #a71e2a)';
-                startBtn.disabled = false;
-            }
-        }
-
-        function updateOverlay() {
-            if (canvas.height > canvas.width) {
-                const templateWidth = 0.70 * canvas.width;
-                const templateHeight = 0.80 * canvas.height;
-                const xOffset = (canvas.width - templateWidth) / 2;
-                const yOffset = (canvas.height - templateHeight) / 2;
-
-                overlaySvg.innerHTML = `
-                    <rect class="alignment-guide" x="${xOffset / canvas.width * 100}%" y="${yOffset / canvas.height * 100}%" width="${templateWidth / canvas.width * 100}%" height="${templateHeight / canvas.height * 100}%" rx="15"/>
-                    <circle class="corner-marker" cx="${xOffset / canvas.width * 100}%" cy="${yOffset / canvas.height * 100}%" r="8"/>
-                    <circle class="corner-marker" cx="${(xOffset + templateWidth) / canvas.width * 100}%" cy="${yOffset / canvas.height * 100}%" r="8"/>
-                    <circle class="corner-marker" cx="${(xOffset + templateWidth) / canvas.width * 100}%" cy="${(yOffset + templateHeight) / canvas.height * 100}%" r="8"/>
-                    <circle class="corner-marker" cx="${xOffset / canvas.width * 100}%" cy="${(yOffset + templateHeight) / canvas.height * 100}%" r="8"/>
-                    <line stroke="#00ff41" stroke-width="3" x1="${(xOffset + templateWidth * 0.45) / canvas.width * 100}%" y1="${(yOffset + templateHeight * 0.50) / canvas.height * 100}%" x2="${(xOffset + templateWidth * 0.55) / canvas.width * 100}%" y2="${(yOffset + templateHeight * 0.50) / canvas.height * 100}%" opacity="0.8"/>
-                    <line stroke="#00ff41" stroke-width="3" x1="${(xOffset + templateWidth * 0.50) / canvas.width * 100}%" y1="${(yOffset + templateHeight * 0.45) / canvas.height * 100}%" x2="${(xOffset + templateWidth * 0.50) / canvas.width * 100}%" y2="${(yOffset + templateHeight * 0.55) / canvas.height * 100}%" opacity="0.8"/>
-                `;
-            } else {
-                overlaySvg.innerHTML = `
-                    <rect class="alignment-guide" x="15%" y="10%" width="70%" height="80%" rx="15"/>
-                    <circle class="corner-marker" cx="15%" cy="10%" r="8"/>
-                    <circle class="corner-marker" cx="85%" cy="10%" r="8"/>
-                    <circle class="corner-marker" cx="85%" cy="90%" r="8"/>
-                    <circle class="corner-marker" cx="15%" cy="90%" r="8"/>
-                    <line stroke="#00ff41" stroke-width="3" x1="45%" y1="50%" x2="55%" y2="50%" opacity="0.8"/>
-                    <line stroke="#00ff41" stroke-width="3" x1="50%" y1="45%" x2="50%" y2="55%" opacity="0.8"/>
-                `;
-            }
-        }
-
-        function set
+                for (let i = 0; i < constraintSets.length; i++) {
+                    try {
+                        debugLog(`Trying constraint set ${i + 1}: ${JSON.stringify(constraintSets[i])}`);
+                        stream = await navigator.mediaDevices.getUserMedia(constraintSets[i]);
+                        debugLog('Stream acquired successfully');
+                        break;
+                    } catch (error) {
+                        debugLog(`Constraint set ${i +
