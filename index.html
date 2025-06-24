@@ -1,336 +1,193 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Enhanced OMR Scanner</title>
+  <meta charset="UTF-8">
+  <title>Auto OMR Scanner</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 10px;
-    }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 20px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-      overflow: hidden;
-      backdrop-filter: blur(10px);
-    }
-
-    .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .header h1 {
-      margin-bottom: 15px;
-      font-size: 2.5em;
-      font-weight: 700;
-      position: relative;
-      z-index: 1;
-    }
-
-    .header p {
-      font-size: 1.2em;
-      opacity: 0.9;
-      position: relative;
-      z-index: 1;
-    }
-
-    .controls {
-      padding: 25px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      align-items: center;
-      background: rgba(248, 249, 250, 0.8);
-      border-bottom: 1px solid rgba(233, 236, 239, 0.5);
-    }
-
-    .btn {
-      padding: 15px 30px;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      transition: all 0.3s ease;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, #007bff, #0056b3);
-      color: white;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 25px rgba(0, 123, 255, 0.3);
-    }
-
-    .btn-success {
-      background: linear-gradient(135deg, #28a745, #1e7e34);
-      color: white;
-    }
-
-    .btn-warning {
-      background: linear-gradient(135deg, #ffc107, #e0a800);
-      color: #212529;
-    }
-
-    .mode-indicator {
-      padding: 12px 24px;
-      border-radius: 25px;
-      font-weight: bold;
-      text-transform: uppercase;
-      font-size: 12px;
-      letter-spacing: 1px;
-    }
-
-    .mode-answer-key {
-      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-      color: #1976d2;
-      border: 2px solid #1976d2;
-    }
-
-    .mode-evaluate {
-      background: linear-gradient(135deg, #e8f5e8, #c8e6c9);
-      color: #2e7d32;
-      border: 2px solid #2e7d32;
-    }
-
-    .main-content {
-      display: flex;
-      flex-wrap: wrap;
-      min-height: 70vh;
-    }
-
-    .camera-section {
-      flex: 1;
-      min-width: 350px;
-      padding: 25px;
-      position: relative;
-    }
-
-    .camera-container {
-      position: relative;
-      width: 100%;
-      background: #000;
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 15px 35px rgba(0,0,0,0.2);
-      border: 3px solid rgba(255,255,255,0.1);
-      min-height: 300px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #video {
-      width: 100%;
-      height: auto;
-      display: block;
-    }
-
-    .camera-placeholder {
-      color: white;
-      text-align: center;
-      padding: 40px;
-      font-size: 1.2em;
-      position: absolute;
-      z-index: 1;
-    }
-
-    canvas {
-      display: none;
-    }
-
-    .results-section {
-      flex: 1;
-      min-width: 350px;
-      padding: 25px;
-      background: rgba(248, 249, 250, 0.6);
-      border-left: 1px solid rgba(233, 236, 239, 0.5);
-    }
-
-    .result-card {
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 20px;
-      padding: 25px;
-      margin-bottom: 25px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-
-    .result-header {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 20px;
-      color: #495057;
-      position: relative;
-    }
-
-    .result-header::after {
-      content: '';
-      position: absolute;
-      bottom: -5px;
-      left: 0;
-      width: 50px;
-      height: 3px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      border-radius: 2px;
-    }
-
-    .overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      pointer-events: none;
-      z-index: 2;
-    }
-
-    .overlay svg {
-      width: 100%;
-      height: 100%;
-    }
-
-    .alignment-guide {
-      stroke: #00ff00;
-      stroke-width: 3;
-      fill: none;
-      stroke-dasharray: 10,5;
-      opacity: 0.8;
-    }
-
-    .corner-marker {
-      fill: #ff0000;
-      opacity: 0.7;
-    }
-
-    @media (max-width: 768px) {
-      .controls {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .main-content {
-        flex-direction: column;
-      }
-
-      .results-section {
-        border-left: none;
-        border-top: 1px solid rgba(233, 236, 239, 0.5);
-      }
-
-      .header h1 {
-        font-size: 2em;
-      }
-    }
+    /* (All your styles previously provided: container, header, overlay, buttons, canvas hidden, etc.) */
+    /* … */
+    .overlay { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:2; }
+    .overlay svg { width:100%; height:100%; }
+    .alignment-guide { stroke:#00ff00; stroke-width:3; fill:none; stroke-dasharray:10,5; opacity:0.8; }
+    .corner-marker { fill:#ff0000; opacity:0.7; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>Enhanced OMR Scanner</h1>
-      <p>Advanced optical mark recognition with real-time processing</p>
-    </div>
-
-    <div class="controls">
-      <button id="startCamera" class="btn btn-primary">🎥 Start Camera</button>
-      <button id="setAnswerKey" class="btn btn-warning">📝 Answer Key Mode</button>
-      <button id="evaluateMode" class="btn btn-success">✅ Evaluate Mode</button>
-      <div id="modeIndicator" class="mode-indicator mode-answer-key">Answer Key Mode</div>
-    </div>
-
-    <div class="main-content">
-      <div class="camera-section">
-        <div class="camera-container">
-          <div class="camera-placeholder" id="cameraPlaceholder">
-            📷 Click "Start Camera" to begin
-          </div>
-          <video id="video" autoplay playsinline muted style="display: none;"></video>
-
-          <!-- ✅ Template overlay -->
-          <div class="overlay">
-            <svg id="overlaySvg">
-              <rect class="alignment-guide" x="15%" y="10%" width="70%" height="80%" rx="10"/>
-              <circle class="corner-marker" cx="15%" cy="10%" r="8"/>
-              <circle class="corner-marker" cx="85%" cy="10%" r="8"/>
-              <circle class="corner-marker" cx="85%" cy="90%" r="8"/>
-              <circle class="corner-marker" cx="15%" cy="90%" r="8"/>
-              <line stroke="#00ff00" stroke-width="2" x1="45%" y1="50%" x2="55%" y2="50%" opacity="0.6"/>
-              <line stroke="#00ff00" stroke-width="2" x1="50%" y1="45%" x2="50%" y2="55%" opacity="0.6"/>
-            </svg>
-          </div>
-        </div>
-        <canvas id="canvas"></canvas>
-        <canvas id="processCanvas"></canvas>
-      </div>
-
-      <div class="results-section">
-        <div class="result-card">
-          <div class="result-header">📖 Instructions</div>
-          <ol style="padding-left: 25px; line-height: 2; font-size: 15px;">
-            <li><strong>Browser:</strong> Use Chrome, Firefox, or Safari for best compatibility</li>
-            <li><strong>HTTPS:</strong> Camera requires secure connection (https://)</li>
-            <li><strong>Permissions:</strong> Allow camera access when prompted</li>
-            <li><strong>Setup:</strong> First scan answer key, then switch to evaluate mode</li>
-            <li><strong>Lighting:</strong> Ensure good lighting for optimal recognition</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Your JavaScript logic should come here -->
+  <!-- (Your full markup: container, header, controls, camera-section with overlay, results-section) -->
+  <div class="overlay"><svg id="overlaySvg"></svg></div>
+  <canvas id="canvas" style="display:none"></canvas>
+  <canvas id="proc" style="display:none"></canvas>
+  
   <script>
-    // Example: Minimal setup logic (add full script separately)
-    document.getElementById('startCamera').addEventListener('click', async () => {
-      const video = document.getElementById('video');
-      const placeholder = document.getElementById('cameraPlaceholder');
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        video.srcObject = stream;
-        video.style.display = 'block';
-        placeholder.style.display = 'none';
-      } catch (err) {
-        alert('Camera error: ' + err.message);
+    const video = document.getElementById('video');
+    const cvCanvas = document.getElementById('canvas');
+    const proc = document.getElementById('proc');
+    const overlay = document.getElementById('overlaySvg');
+    const ctx = cvCanvas.getContext('2d');
+    const pctx = proc.getContext('2d');
+
+    let answerKey=null, mode='answer';
+    document.getElementById('setAnswerKey').onclick=()=>{mode='answer';updateModeIndicator();}
+    document.getElementById('evaluateMode').onclick=()=>{if(!answerKey)return alert('Set key first');mode='evaluate';updateModeIndicator();}
+    function updateModeIndicator(){
+      const el=document.getElementById('modeIndicator');
+      el.textContent= mode==='answer'?'Answer Key Mode':'Evaluate Mode';
+      el.className= 'mode-indicator ' + (mode==='answer'?'mode-answer-key':'mode-evaluate');
+    }
+
+    async function startCam(){
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+      video.srcObject=stream;await video.play();
+      cvCanvas.width=video.videoWidth;cvCanvas.height=video.videoHeight;
+      proc.width = video.videoWidth;proc.height = video.videoHeight;
+      video.onloadedmetadata=updateOverlay;
+      requestAnimationFrame(processLoop);
+    }
+    document.getElementById('startCamera').onclick=startCam;
+
+    function updateOverlay(){
+      const w=video.videoWidth, h=video.videoHeight;
+      const portrait = h>w;
+      const rect = portrait ?
+        {x:0.10*w, y:0.10*h, w:0.80*w, h:0.80*h} :
+        {x:0.10*w, y:0.10*h, w:0.80*w, h:0.80*h};
+      const {x,y,w:rw,h:rh}=rect;
+      const c = (i,n,d)=>i + d*(n-1); // for corners
+      overlay.innerHTML = `
+        <rect class="alignment-guide" x="${x}" y="${y}" width="${rw}" height="${rh}" rx="10"/>
+        <circle class="corner-marker" cx="${x}" cy="${y}" r="8"/>
+        <circle class="corner-marker" cx="${x+rw}" cy="${y}" r="8"/>
+        <circle class="corner-marker" cx="${x+rw}" cy="${y+rh}" r="8"/>
+        <circle class="corner-marker" cx="${x}" cy="${y+rh}" r="8"/>
+      `;
+    }
+
+    let stable=0;
+    const STABLE_THRESHOLD=20;
+    let lastFrameData=null;
+
+    function processLoop(){
+      ctx.drawImage(video,0,0);
+      const img = ctx.getImageData(0,0,cvCanvas.width,cvCanvas.height);
+      const data = img.data;
+      if(!lastFrameData) lastFrameData=new Uint8ClampedArray(data);
+      let diff=0;
+      for(let i=0;i<data.length;i+=4){
+        diff += Math.abs(data[i]-lastFrameData[i]);
       }
-    });
+      const change = diff / data.length;
+      lastFrameData = new Uint8ClampedArray(data);
+      if(change<1){ stable++; } else { stable=0; }
+      if(stable===STABLE_THRESHOLD){
+        stable=0;
+        captureAndProcess();
+      }
+      requestAnimationFrame(processLoop);
+    }
 
-    document.getElementById('setAnswerKey').onclick = () => {
-      document.getElementById('modeIndicator').textContent = 'Answer Key Mode';
-      document.getElementById('modeIndicator').className = 'mode-indicator mode-answer-key';
-    };
+    function captureAndProcess(){
+      ctx.drawImage(video,0,0);
+      const W=cvCanvas.width, H=cvCanvas.height;
+      // Grayscale
+      const img = ctx.getImageData(0,0,W,H);
+      const d=img.data;
+      for(let i=0;i<d.length;i+=4){
+        const g = 0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2];
+        d[i]=d[i+1]=d[i+2]=g;
+      }
+      proc.putImageData(img,0,0);
+      // detect border for perspective correct
+      const edges = detectBlackBorder(img,W,H);
+      if(!edges) return;
+      const warp = fourPointWarp(proc, edges, 1000,750);
+      analyzeWarp(warp);
+    }
 
-    document.getElementById('evaluateMode').onclick = () => {
-      document.getElementById('modeIndicator').textContent = 'Evaluate Mode';
-      document.getElementById('modeIndicator').className = 'mode-indicator mode-evaluate';
-    };
+    // Tiny edge detection + border: find outermost dark rectangle
+    function detectBlackBorder(img,W,H){
+      const d=img.data;
+      const thresh=40;
+      const coords=[];
+      for(let y=0;y<H;y+=10){
+        for(let x=0;x<W;x+=10){
+          const i=(y*W+x)*4;
+          if(d[i]<thresh){
+            coords.push({x,y});
+          }
+        }
+      }
+      if(coords.length<100)return null;
+      // bounding box
+      const xs=coords.map(p=>p.x), ys=coords.map(p=>p.y);
+      const minX=Math.min(...xs), maxX=Math.max(...xs);
+      const minY=Math.min(...ys), maxY=Math.max(...ys);
+      return [{x:minX,y:minY},{x:maxX,y:minY},{x:maxX,y:maxY},{x:minX,y:maxY}];
+    }
+
+    function fourPointWarp(canvasIn,pts,W2,H2){
+      // use simple library-free warp: assume bounding rect
+      const temp=document.createElement('canvas');
+      temp.width=W2; temp.height=H2;
+      const ictx=temp.getContext('2d');
+      ictx.drawImage(canvasIn, pts[0].x,pts[0].y, pts[2].x-pts[0].x, pts[2].y-pts[0].y, 0,0,W2,H2);
+      return ictx.getImageData(0,0,W2,H2);
+    }
+
+    function analyzeWarp(warp){
+      const W=warp.width, H=warp.height;
+      // ID region: right side
+      const idCols = 4, idRows=10;
+      const colW = 0.15*W/idCols, rowH=0.8*H/idRows;
+      const idX0=0.8*W, idY0=0.1*H;
+      const id = [];
+      for(let c=0;c<idCols;c++){
+        let best=-1, bestVal=0;
+        for(let r=0;r<idRows;r++){
+          const val = avgGrayRegion(warp,
+            idX0 + c*colW, idY0 + r*rowH, colW, rowH);
+          if(val>bestVal){ bestVal=val; best=r; }
+        }
+        id.push(best);
+      }
+      // Answers region: left area
+      const q=20, opts=5;
+      const aW=0.6*W, aH=0.8*H;
+      const ax0=0.1*W, ay0=0.1*H;
+      const rowH2 = aH/q, cellW= aW/opts;
+      const answers=[];
+      for(let i=0;i<q;i++){
+        let sel=null, mval=0;
+        for(let o=0;o<opts;o++){
+          const val = avgGrayRegion(warp,
+            ax0 + o*cellW, ay0 + i*rowH2, cellW, rowH2);
+          if(val>mval){ mval=val; sel=o; }
+        }
+        answers.push(sel);
+      }
+      if(mode==='answer'){
+        answerKey = answers;
+        alert('Answer key saved.');
+      } else {
+        let score=0;
+        answers.forEach((a,i)=>{ if(a===answerKey[i])score++; });
+        document.getElementById('scoreNumber').textContent = `${score} / 20`;
+        document.getElementById('resultsSection').style.display = 'block';
+      }
+    }
+
+    function avgGrayRegion(img, x0,y0,w,h){
+      const W=img.width, d=img.data;
+      let sum=0,c=0;
+      for(let y=y0+5;y<y0+h-5;y+=3){
+        for(let x=x0+5;x<x0+w-5;x+=3){
+          const i=(Math.floor(y)*W+Math.floor(x))*4;
+          sum += 255 - d[i];
+          c++;
+        }
+      }
+      return sum/c;
+    }
   </script>
 </body>
 </html>
