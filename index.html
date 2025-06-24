@@ -37,28 +37,6 @@
             overflow: hidden;
         }
 
-        .header::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: repeating-linear-gradient(
-                45deg,
-                transparent,
-                transparent 2px,
-                rgba(255,255,255,0.1) 2px,
-                rgba(255,255,255,0.1) 4px
-            );
-            animation: float 20s linear infinite;
-        }
-
-        @keyframes float {
-            0% { transform: translateX(-50px) translateY(-50px); }
-            100% { transform: translateX(50px) translateY(50px); }
-        }
-
         .header h1 {
             margin-bottom: 15px;
             font-size: 2.5em;
@@ -82,7 +60,6 @@
             align-items: center;
             background: rgba(248, 249, 250, 0.8);
             border-bottom: 1px solid rgba(233, 236, 239, 0.5);
-            backdrop-filter: blur(5px);
         }
 
         .btn {
@@ -92,27 +69,15 @@
             cursor: pointer;
             font-size: 14px;
             font-weight: 600;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: all 0.3s ease;
             text-transform: uppercase;
             letter-spacing: 0.8px;
-            position: relative;
-            overflow: hidden;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
 
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            transition: left 0.5s;
-        }
-
-        .btn:hover::before {
-            left: 100%;
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         .btn-primary {
@@ -120,8 +85,8 @@
             color: white;
         }
 
-        .btn-primary:hover {
-            transform: translateY(-3px) scale(1.05);
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(0, 123, 255, 0.3);
         }
 
@@ -130,19 +95,9 @@
             color: white;
         }
 
-        .btn-success:hover {
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.3);
-        }
-
         .btn-warning {
             background: linear-gradient(135deg, #ffc107, #e0a800);
             color: #212529;
-        }
-
-        .btn-warning:hover {
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(255, 193, 7, 0.3);
         }
 
         .mode-indicator {
@@ -152,13 +107,6 @@
             text-transform: uppercase;
             font-size: 12px;
             letter-spacing: 1px;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(25, 118, 210, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(25, 118, 210, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(25, 118, 210, 0); }
         }
 
         .mode-answer-key {
@@ -194,58 +142,27 @@
             overflow: hidden;
             box-shadow: 0 15px 35px rgba(0,0,0,0.2);
             border: 3px solid rgba(255,255,255,0.1);
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        video {
+        #video {
             width: 100%;
             height: auto;
             display: block;
         }
 
+        .camera-placeholder {
+            color: white;
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+
         canvas {
             display: none;
-        }
-
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        .overlay svg {
-            width: 100%;
-            height: 100%;
-        }
-
-        .alignment-guide {
-            stroke: #00ff41;
-            stroke-width: 4;
-            fill: none;
-            stroke-dasharray: 15,8;
-            opacity: 0.9;
-            filter: drop-shadow(0 0 5px #00ff41);
-            animation: glow 2s ease-in-out infinite alternate;
-        }
-
-        @keyframes glow {
-            from { opacity: 0.7; }
-            to { opacity: 1; }
-        }
-
-        .corner-marker {
-            fill: #ff3d71;
-            opacity: 0.8;
-            filter: drop-shadow(0 0 3px #ff3d71);
-            animation: cornerPulse 1.5s ease-in-out infinite;
-        }
-
-        @keyframes cornerPulse {
-            0%, 100% { r: 8; }
-            50% { r: 12; }
         }
 
         .results-section {
@@ -254,7 +171,6 @@
             padding: 25px;
             background: rgba(248, 249, 250, 0.6);
             border-left: 1px solid rgba(233, 236, 239, 0.5);
-            backdrop-filter: blur(5px);
         }
 
         .result-card {
@@ -264,12 +180,6 @@
             margin-bottom: 25px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             border: 1px solid rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-            transition: transform 0.3s ease;
-        }
-
-        .result-card:hover {
-            transform: translateY(-5px);
         }
 
         .result-header {
@@ -291,138 +201,6 @@
             border-radius: 2px;
         }
 
-        .answer-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 12px;
-            margin-bottom: 25px;
-        }
-
-        .answer-item {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 600;
-            text-align: center;
-            transition: all 0.3s ease;
-        }
-
-        .answer-item:hover {
-            transform: scale(1.05);
-        }
-
-        .answer-correct {
-            background: linear-gradient(135deg, #d4edda, #a3d9a4);
-            color: #155724;
-            border: 2px solid #28a745;
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
-        }
-
-        .answer-wrong {
-            background: linear-gradient(135deg, #f8d7da, #f1aeb5);
-            color: #721c24;
-            border: 2px solid #dc3545;
-            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.2);
-        }
-
-        .answer-neutral {
-            background: linear-gradient(135deg, #e2e3e5, #d1d3d4);
-            color: #495057;
-            border: 2px solid #6c757d;
-            box-shadow: 0 4px 15px rgba(108, 117, 125, 0.2);
-        }
-
-        .score-display {
-            text-align: center;
-            padding: 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 20px;
-            margin-bottom: 25px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .score-display::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: repeating-linear-gradient(
-                45deg,
-                transparent,
-                transparent 2px,
-                rgba(255,255,255,0.1) 2px,
-                rgba(255,255,255,0.1) 4px
-            );
-            animation: float 20s linear infinite;
-        }
-
-        .score-number {
-            font-size: 4em;
-            font-weight: 900;
-            margin-bottom: 15px;
-            position: relative;
-            z-index: 1;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
-        }
-
-        .score-label {
-            font-size: 1.3em;
-            opacity: 0.95;
-            position: relative;
-            z-index: 1;
-        }
-
-        .student-id {
-            background: linear-gradient(135deg, #007bff, #0056b3);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            font-size: 1.6em;
-            font-weight: 700;
-            margin-bottom: 25px;
-            box-shadow: 0 8px 25px rgba(0, 123, 255, 0.3);
-            letter-spacing: 2px;
-        }
-
-        .processing {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.9);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.8em;
-            backdrop-filter: blur(5px);
-        }
-
-        .spinner {
-            width: 80px;
-            height: 80px;
-            border: 6px solid rgba(255,255,255,0.3);
-            border-top: 6px solid #00ff41;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 30px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
         .error-message, .success-message {
             padding: 20px;
             border-radius: 15px;
@@ -440,57 +218,12 @@
             background: linear-gradient(135deg, #f8d7da, #f1aeb5);
             color: #721c24;
             border: 2px solid #dc3545;
-            box-shadow: 0 8px 25px rgba(220, 53, 69, 0.2);
         }
 
         .success-message {
             background: linear-gradient(135deg, #d4edda, #a3d9a4);
             color: #155724;
             border: 2px solid #28a745;
-            box-shadow: 0 8px 25px rgba(40, 167, 69, 0.2);
-        }
-
-        .answer-key-display {
-            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-            border: 3px solid #1976d2;
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 25px;
-            font-size: 16px;
-            line-height: 1.8;
-        }
-
-        .stats-card {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 15px;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.7);
-            border: 2px solid transparent;
-            transition: all 0.3s ease;
-        }
-
-        .stat-item:hover {
-            border-color: #667eea;
-            transform: translateY(-2px);
-        }
-
-        .stat-number {
-            font-size: 2em;
-            font-weight: 700;
-            color: #667eea;
-        }
-
-        .stat-label {
-            font-size: 0.9em;
-            color: #6c757d;
-            font-weight: 500;
         }
 
         .debug-info {
@@ -501,8 +234,33 @@
             border: 2px solid #ffc107;
             font-family: monospace;
             font-size: 12px;
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
+        }
+
+        .status-indicator {
+            padding: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #28a745;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #dc3545;
+        }
+
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffc107;
         }
 
         @media (max-width: 768px) {
@@ -523,10 +281,6 @@
             .header h1 {
                 font-size: 2em;
             }
-
-            .header p {
-                font-size: 1em;
-            }
         }
     </style>
 </head>
@@ -546,92 +300,52 @@
 
         <div class="main-content">
             <div class="camera-section">
-                <div class="camera-container">
-                    <video id="video" autoplay playsinline></video>
-                    <div class="overlay">
-                        <svg id="overlaySvg">
-                            <rect class="alignment-guide" x="15%" y="10%" width="70%" height="80%" rx="15"/>
-                            <circle class="corner-marker" cx="15%" cy="10%" r="8"/>
-                            <circle class="corner-marker" cx="85%" cy="10%" r="8"/>
-                            <circle class="corner-marker" cx="85%" cy="90%" r="8"/>
-                            <circle class="corner-marker" cx="15%" cy="90%" r="8"/>
-                            <line stroke="#00ff41" stroke-width="3" x1="45%" y1="50%" x2="55%" y2="50%" opacity="0.8"/>
-                            <line stroke="#00ff41" stroke-width="3" x1="50%" y1="45%" x2="50%" y2="55%" opacity="0.8"/>
-                        </svg>
+                <div class="camera-container" id="cameraContainer">
+                    <div class="camera-placeholder" id="cameraPlaceholder">
+                        📷 Click "Start Camera" to begin
                     </div>
+                    <video id="video" autoplay playsinline muted style="display: none;"></video>
                 </div>
                 <canvas id="canvas"></canvas>
                 <canvas id="processCanvas"></canvas>
             </div>
 
             <div class="results-section">
-                <div id="debugInfo" class="debug-info" style="display: none;">
+                <div id="debugInfo" class="debug-info">
+                    <div style="font-weight: bold; margin-bottom: 10px;">🔧 Debug Information</div>
                     <div id="debugOutput"></div>
                 </div>
 
-                <div id="answerKeySection" class="result-card" style="display: none;">
-                    <div class="result-header">📋 Answer Key</div>
-                    <div id="answerKeyDisplay" class="answer-key-display"></div>
-                </div>
-
-                <div id="resultsSection" class="result-card" style="display: none;">
-                    <div id="studentId" class="student-id">Student ID: ----</div>
-                    <div id="scoreDisplay" class="score-display">
-                        <div class="score-number" id="scoreNumber">--</div>
-                        <div class="score-label">Score out of 20</div>
-                    </div>
-                    <div class="result-header">📊 Detailed Results</div>
-                    <div id="answerGrid" class="answer-grid"></div>
-                    
-                    <div class="stats-card">
-                        <div class="stat-item">
-                            <div class="stat-number" id="correctStat">0</div>
-                            <div class="stat-label">Correct</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number" id="wrongStat">0</div>
-                            <div class="stat-label">Wrong</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-number" id="percentageStat">0%</div>
-                            <div class="stat-label">Percentage</div>
-                        </div>
-                    </div>
+                <div id="statusCard" class="result-card">
+                    <div class="result-header">📊 System Status</div>
+                    <div id="browserStatus" class="status-indicator">Checking browser compatibility...</div>
+                    <div id="cameraStatus" class="status-indicator">Camera not initialized</div>
+                    <div id="permissionStatus" class="status-indicator">Permissions not checked</div>
                 </div>
 
                 <div id="instructionsCard" class="result-card">
                     <div class="result-header">📖 Instructions</div>
                     <ol style="padding-left: 25px; line-height: 2; font-size: 15px;">
-                        <li><strong>Setup:</strong> First scan the answer key sheet in "Answer Key Mode"</li>
-                        <li><strong>Evaluate:</strong> Switch to "Evaluate Mode" to scan student sheets</li>
-                        <li><strong>Alignment:</strong> Position the OMR sheet within the green guide</li>
-                        <li><strong>Quality:</strong> Ensure good lighting and all corners are visible</li>
-                        <li><strong>Auto-capture:</strong> The system will automatically process aligned sheets</li>
+                        <li><strong>Browser:</strong> Use Chrome, Firefox, or Safari for best compatibility</li>
+                        <li><strong>HTTPS:</strong> Camera requires secure connection (https://)</li>
+                        <li><strong>Permissions:</strong> Allow camera access when prompted</li>
+                        <li><strong>Setup:</strong> First scan answer key, then switch to evaluate mode</li>
+                        <li><strong>Lighting:</strong> Ensure good lighting for optimal recognition</li>
                     </ol>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="processing" id="processing">
-        <div style="text-align: center;">
-            <div class="spinner"></div>
-            <div>🔍 Processing OMR Sheet...</div>
-            <div style="font-size: 0.8em; margin-top: 10px; opacity: 0.7;">Please wait while we analyze the bubbles</div>
-        </div>
-    </div>
-
     <script>
-        // Enhanced OMR Scanner with improved error handling and debugging
-        let video, canvas, ctx, processCanvas, processCtx, overlaySvg;
+        // Global variables
+        let video, canvas, ctx, processCanvas, processCtx;
         let isAnswerKeyMode = true;
         let answerKey = null;
         let stream = null;
-        let isAligned = false;
-        let lastBoundaries = null;
-        let stableFrames = 0;
-        const STABILITY_THRESHOLD = 8;
+        let debugOutput = null;
 
+        // Configuration
         const OMR_CONFIG = {
             questions: 20,
             optionsPerQuestion: 5,
@@ -640,252 +354,354 @@
         };
 
         // Debug logging function
-        function debugLog(message) {
-            console.log(message);
-            const debugOutput = document.getElementById('debugOutput');
+        function debugLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            
+            console.log(logMessage);
+            
             if (debugOutput) {
-                debugOutput.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+                const logDiv = document.createElement('div');
+                logDiv.style.marginBottom = '5px';
+                logDiv.style.padding = '2px 5px';
+                logDiv.style.borderRadius = '3px';
+                
+                switch(type) {
+                    case 'error':
+                        logDiv.style.backgroundColor = '#f8d7da';
+                        logDiv.style.color = '#721c24';
+                        break;
+                    case 'success':
+                        logDiv.style.backgroundColor = '#d4edda';
+                        logDiv.style.color = '#155724';
+                        break;
+                    case 'warning':
+                        logDiv.style.backgroundColor = '#fff3cd';
+                        logDiv.style.color = '#856404';
+                        break;
+                    default:
+                        logDiv.style.backgroundColor = '#e2e3e5';
+                        logDiv.style.color = '#495057';
+                }
+                
+                logDiv.textContent = logMessage;
+                debugOutput.appendChild(logDiv);
                 debugOutput.scrollTop = debugOutput.scrollHeight;
+                
+                // Keep only last 50 messages
+                while (debugOutput.children.length > 50) {
+                    debugOutput.removeChild(debugOutput.firstChild);
+                }
             }
         }
 
-        // Show debug panel
-        function showDebug() {
-            document.getElementById('debugInfo').style.display = 'block';
+        // Update status indicators
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = message;
+                element.className = 'status-indicator';
+                
+                switch(type) {
+                    case 'success':
+                        element.classList.add('status-success');
+                        break;
+                    case 'error':
+                        element.classList.add('status-error');
+                        break;
+                    case 'warning':
+                        element.classList.add('status-warning');
+                        break;
+                }
+            }
         }
 
-        // Error display function
+        // Show error message
         function showError(message) {
-            console.error(message);
-            debugLog('ERROR: ' + message);
-            showDebug();
+            debugLog(message, 'error');
             
-            // Remove existing messages
             const existing = document.querySelectorAll('.error-message');
             existing.forEach(el => el.remove());
             
-            // Create new error message
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error-message';
             errorDiv.textContent = message;
             document.querySelector('.results-section').insertBefore(errorDiv, document.querySelector('.results-section').firstChild);
             
-            // Auto-remove after 10 seconds
             setTimeout(() => errorDiv.remove(), 10000);
         }
 
-        // Success display function
+        // Show success message
         function showSuccess(message) {
-            console.log(message);
-            debugLog('SUCCESS: ' + message);
+            debugLog(message, 'success');
             
-            // Remove existing messages
             const existing = document.querySelectorAll('.success-message');
             existing.forEach(el => el.remove());
             
-            // Create new success message
             const successDiv = document.createElement('div');
             successDiv.className = 'success-message';
             successDiv.textContent = message;
             document.querySelector('.results-section').insertBefore(successDiv, document.querySelector('.results-section').firstChild);
             
-            // Auto-remove after 5 seconds
             setTimeout(() => successDiv.remove(), 5000);
         }
 
-        // Check browser compatibility
-        function checkBrowserSupport() {
-            debugLog('Checking browser support...');
+        // Check browser support
+        async function checkBrowserSupport() {
+            debugLog('Checking browser compatibility...');
             
+            // Check basic requirements
             if (!navigator.mediaDevices) {
-                showError('❌ navigator.mediaDevices not supported');
+                updateStatus('browserStatus', '❌ MediaDevices API not supported', 'error');
                 return false;
             }
             
             if (!navigator.mediaDevices.getUserMedia) {
-                showError('❌ getUserMedia not supported');
+                updateStatus('browserStatus', '❌ getUserMedia not supported', 'error');
                 return false;
             }
             
             if (!HTMLCanvasElement.prototype.getContext) {
-                showError('❌ Canvas not supported');
+                updateStatus('browserStatus', '❌ Canvas API not supported', 'error');
                 return false;
             }
             
-            debugLog('Browser support: OK');
+            // Check if running on HTTPS (required for camera on most browsers)
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                updateStatus('browserStatus', '⚠️ HTTPS required for camera access', 'warning');
+                debugLog('Warning: Camera may not work without HTTPS', 'warning');
+            } else {
+                updateStatus('browserStatus', '✅ Browser compatible', 'success');
+            }
+            
+            debugLog('Browser compatibility check completed', 'success');
             return true;
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            try {
-                debugLog('Initializing application...');
-                
-                if (!checkBrowserSupport()) {
-                    return;
-                }
-                
-                initializeElements();
-                setupEventListeners();
-                checkCameraAvailability();
-                
-                debugLog('Application initialized successfully');
-            } catch (error) {
-                console.error('Initialization failed:', error);
-                showError('❌ Application failed to load: ' + error.message);
-            }
-        });
-
-        function initializeElements() {
-            debugLog('Initializing DOM elements...');
-            
-            video = document.getElementById('video');
-            canvas = document.getElementById('canvas');
-            ctx = canvas.getContext('2d');
-            processCanvas = document.getElementById('processCanvas');
-            processCtx = processCanvas.getContext('2d');
-            overlaySvg = document.getElementById('overlaySvg');
-            
-            if (!video || !canvas || !ctx || !processCanvas || !processCtx || !overlaySvg) {
-                throw new Error('Failed to initialize required DOM elements');
-            }
-            
-            debugLog('DOM elements initialized successfully');
-        }
-
-        function setupEventListeners() {
-            debugLog('Setting up event listeners...');
-            
-            const startBtn = document.getElementById('startCamera');
-            const answerKeyBtn = document.getElementById('setAnswerKey');
-            const evaluateBtn = document.getElementById('evaluateMode');
-            
-            if (!startBtn || !answerKeyBtn || !evaluateBtn) {
-                throw new Error('Required buttons not found');
-            }
-            
-            startBtn.addEventListener('click', async () => {
-                debugLog('Start camera button clicked');
-                try {
-                    const hasPermission = await checkCameraPermissions();
-                    if (hasPermission) {
-                        await startCamera();
-                    }
-                } catch (error) {
-                    showError('Camera start failed: ' + error.message);
-                }
-            });
-
-            answerKeyBtn.addEventListener('click', () => {
-                debugLog('Answer key mode selected');
-                setMode(true);
-            });
-
-            evaluateBtn.addEventListener('click', () => {
-                debugLog('Evaluate mode selected');
-                setMode(false);
-            });
-            
-            debugLog('Event listeners set up successfully');
-        }
-
+        // Check camera availability
         async function checkCameraAvailability() {
             try {
                 debugLog('Checking camera availability...');
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 const cameras = devices.filter(device => device.kind === 'videoinput');
-                debugLog(`Found ${cameras.length} camera(s)`);
                 
                 if (cameras.length === 0) {
-                    showError('❌ No cameras detected on this device.');
+                    updateStatus('cameraStatus', '❌ No cameras found', 'error');
                     return false;
                 }
                 
-                // Log camera details
+                updateStatus('cameraStatus', `✅ ${cameras.length} camera(s) available`, 'success');
+                debugLog(`Found ${cameras.length} camera(s)`, 'success');
+                
                 cameras.forEach((camera, index) => {
-                    debugLog(`Camera ${index + 1}: ${camera.label || 'Unknown'} (${camera.deviceId.substring(0, 8)}...)`);
+                    const label = camera.label || `Camera ${index + 1}`;
+                    debugLog(`Camera ${index + 1}: ${label}`);
                 });
                 
                 return true;
             } catch (error) {
-                debugLog('Could not enumerate devices: ' + error.message);
-                showError('⚠️ Unable to check camera availability: ' + error.message);
+                updateStatus('cameraStatus', '⚠️ Could not check cameras', 'warning');
+                debugLog('Camera enumeration failed: ' + error.message, 'warning');
                 return false;
             }
         }
 
-        async function checkCameraPermissions() {
+        // Initialize camera with multiple fallback options
+        async function initializeCamera() {
             try {
-                debugLog('Checking camera permissions...');
+                debugLog('Requesting camera access...');
+                updateStatus('permissionStatus', '⏳ Requesting camera permission...', 'warning');
                 
-                if ('permissions' in navigator) {
-                    const permission = await navigator.permissions.query({ name: 'camera' });
-                    debugLog('Camera permission status: ' + permission.state);
-                    
-                    if (permission.state === 'denied') {
-                        showError('❌ Camera permission denied. Please enable in browser settings.');
-                        return false;
-                    }
-                }
-                
-                return true;
-            } catch (error) {
-                debugLog('Could not check permissions: ' + error.message);
-                return true; // Assume allowed if we can't check
-            }
-        }
-
-        async function startCamera() {
-            try {
-                debugLog('Starting camera...');
-                
-                // Stop existing stream
+                // Stop any existing streams
                 if (stream) {
-                    debugLog('Stopping existing stream...');
-                    stream.getTracks().forEach(track => {
-                        track.stop();
-                        debugLog('Stopped track: ' + track.kind);
-                    });
-                    stream = null;
+                    stream.getTracks().forEach(track => track.stop());
                 }
-
-                // Try different constraint sets
-                const constraintSets = [
-                    { 
-                        video: { 
-                            facingMode: 'environment', 
-                            width: { ideal: 1280 }, 
-                            height: { ideal: 720 } 
-                        } 
-                    },
+                
+                // Try different constraint configurations
+                const constraints = [
+                    // Try rear camera first (mobile)
                     { 
                         video: { 
                             facingMode: 'environment',
-                            width: { ideal: 640 }, 
-                            height: { ideal: 480 } 
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
                         } 
                     },
+                    // Try any camera with good resolution
                     { 
                         video: { 
-                            width: { ideal: 1280 }, 
-                            height: { ideal: 720 } 
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
                         } 
                     },
+                    // Try lower resolution
                     { 
                         video: { 
-                            width: { ideal: 640 }, 
-                            height: { ideal: 480 } 
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
                         } 
                     },
+                    // Basic video only
                     { video: true }
                 ];
                 
                 let lastError = null;
                 
-                for (let i = 0; i < constraintSets.length; i++) {
+                for (let i = 0; i < constraints.length; i++) {
                     try {
-                        debugLog(`Trying constraint set ${i + 1}: ${JSON.stringify(constraintSets[i])}`);
-                        stream = await navigator.mediaDevices.getUserMedia(constraintSets[i]);
-                        debugLog('Stream acquired successfully');
-                        break;
+                        debugLog(`Trying constraint set ${i + 1}...`);
+                        stream = await navigator.mediaDevices.getUserMedia(constraints[i]);
+                        
+                        if (stream && stream.getVideoTracks().length > 0) {
+                            debugLog(`Camera initialized successfully with constraint set ${i + 1}`, 'success');
+                            updateStatus('permissionStatus', '✅ Camera permission granted', 'success');
+                            
+                            // Setup video element
+                            video.srcObject = stream;
+                            video.style.display = 'block';
+                            document.getElementById('cameraPlaceholder').style.display = 'none';
+                            
+                            // Wait for video to be ready
+                            return new Promise((resolve, reject) => {
+                                video.onloadedmetadata = () => {
+                                    debugLog('Video metadata loaded', 'success');
+                                    video.play().then(() => {
+                                        debugLog('Video playback started', 'success');
+                                        showSuccess('Camera started successfully!');
+                                        resolve(true);
+                                    }).catch(reject);
+                                };
+                                
+                                video.onerror = (error) => {
+                                    debugLog('Video error: ' + error, 'error');
+                                    reject(new Error('Video playback failed'));
+                                };
+                                
+                                // Timeout after 10 seconds
+                                setTimeout(() => {
+                                    reject(new Error('Video initialization timeout'));
+                                }, 10000);
+                            });
+                        }
                     } catch (error) {
-                        debugLog(`Constraint set ${i +
+                        lastError = error;
+                        debugLog(`Constraint set ${i + 1} failed: ${error.message}`, 'warning');
+                        continue;
+                    }
+                }
+                
+                throw lastError || new Error('All camera initialization attempts failed');
+                
+            } catch (error) {
+                debugLog('Camera initialization failed: ' + error.message, 'error');
+                updateStatus('permissionStatus', '❌ Camera access denied or failed', 'error');
+                
+                // Show user-friendly error messages
+                if (error.name === 'NotAllowedError') {
+                    showError('❌ Camera permission denied. Please refresh and allow camera access.');
+                } else if (error.name === 'NotFoundError') {
+                    showError('❌ No camera found. Please connect a camera and try again.');
+                } else if (error.name === 'NotReadableError') {
+                    showError('❌ Camera is being used by another application. Please close other apps and try again.');
+                } else if (error.name === 'OverconstrainedError') {
+                    showError('❌ Camera constraints not supported. Trying with basic settings...');
+                } else {
+                    showError('❌ Camera error: ' + error.message);
+                }
+                
+                return false;
+            }
+        }
+
+        // Set mode (answer key or evaluate)
+        function setMode(isAnswerKey) {
+            isAnswerKeyMode = isAnswerKey;
+            const indicator = document.getElementById('modeIndicator');
+            
+            if (isAnswerKey) {
+                indicator.textContent = 'Answer Key Mode';
+                indicator.className = 'mode-indicator mode-answer-key';
+                debugLog('Switched to Answer Key mode', 'info');
+            } else {
+                indicator.textContent = 'Evaluate Mode';
+                indicator.className = 'mode-indicator mode-evaluate';
+                debugLog('Switched to Evaluate mode', 'info');
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                debugLog('Initializing OMR Scanner application...', 'info');
+                
+                // Initialize DOM elements
+                video = document.getElementById('video');
+                canvas = document.getElementById('canvas');
+                ctx = canvas.getContext('2d');
+                processCanvas = document.getElementById('processCanvas');
+                processCtx = processCanvas.getContext('2d');
+                debugOutput = document.getElementById('debugOutput');
+                
+                if (!video || !canvas || !ctx || !processCanvas || !processCtx) {
+                    throw new Error('Failed to initialize required DOM elements');
+                }
+                
+                // Check browser support
+                const browserSupported = await checkBrowserSupport();
+                if (!browserSupported) {
+                    showError('❌ Your browser is not supported. Please use Chrome, Firefox, or Safari.');
+                    return;
+                }
+                
+                // Check camera availability
+                await checkCameraAvailability();
+                
+                // Setup event listeners
+                document.getElementById('startCamera').addEventListener('click', async () => {
+                    debugLog('Start camera button clicked');
+                    const button = document.getElementById('startCamera');
+                    button.disabled = true;
+                    button.textContent = '⏳ Starting...';
+                    
+                    try {
+                        const success = await initializeCamera();
+                        if (success) {
+                            button.textContent = '✅ Camera Active';
+                            button.classList.remove('btn-primary');
+                            button.classList.add('btn-success');
+                        } else {
+                            button.textContent = '🎥 Start Camera';
+                            button.disabled = false;
+                        }
+                    } catch (error) {
+                        button.textContent = '🎥 Start Camera';
+                        button.disabled = false;
+                    }
+                });
+                
+                document.getElementById('setAnswerKey').addEventListener('click', () => {
+                    setMode(true);
+                });
+                
+                document.getElementById('evaluateMode').addEventListener('click', () => {
+                    setMode(false);
+                });
+                
+                debugLog('Application initialized successfully', 'success');
+                
+            } catch (error) {
+                debugLog('Application initialization failed: ' + error.message, 'error');
+                showError('❌ Application failed to load: ' + error.message);
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                debugLog('Cleaned up camera stream');
+            }
+        });
+    </script>
+</body>
+</html>
