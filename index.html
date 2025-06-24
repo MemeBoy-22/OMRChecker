@@ -2,191 +2,339 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Auto OMR Scanner</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Enhanced OMR Sheet Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    /* (All your styles previously provided: container, header, overlay, buttons, canvas hidden, etc.) */
-    /* … */
-    .overlay { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:2; }
-    .overlay svg { width:100%; height:100%; }
-    .alignment-guide { stroke:#00ff00; stroke-width:3; fill:none; stroke-dasharray:10,5; opacity:0.8; }
-    .corner-marker { fill:#ff0000; opacity:0.7; }
+    body {
+      font-family: sans-serif;
+      background: #f0f0f0;
+      margin: 0;
+      padding: 1rem;
+      text-align: center;
+    }
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      background: white;
+      border-radius: 12px;
+      padding: 1rem;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    }
+    .header {
+      margin-bottom: 1rem;
+    }
+    .controls {
+      margin-bottom: 1rem;
+    }
+    .btn {
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+    }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-warning { background: #ffc107; color: black; }
+    .btn-success { background: #28a745; color: white; }
+    .mode-indicator {
+      display: inline-block;
+      padding: 10px;
+      border-radius: 10px;
+      font-weight: bold;
+    }
+    .mode-answer-key { background: #bbdefb; color: #0d47a1; }
+    .mode-evaluate { background: #c8e6c9; color: #1b5e20; }
+    .main-content {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .camera-section, .results-section {
+      flex: 1 1 500px;
+    }
+    .camera-container {
+      position: relative;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #video {
+      width: 100%;
+      display: none;
+    }
+    .camera-placeholder {
+      color: white;
+      padding: 40px;
+    }
+    .overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .overlay svg {
+      width: 100%; height: 100%;
+    }
+    .alignment-guide {
+      stroke: #00ff00;
+      stroke-width: 3;
+      fill: none;
+      stroke-dasharray: 10,5;
+      opacity: 0.8;
+    }
+    .corner-marker {
+      fill: #ff0000;
+      opacity: 0.7;
+    }
+    .result-card {
+      background: #f9f9f9;
+      padding: 1rem;
+      border-radius: 10px;
+      margin-top: 1rem;
+      text-align: left;
+    }
   </style>
 </head>
 <body>
-  <!-- (Your full markup: container, header, controls, camera-section with overlay, results-section) -->
-  <div class="overlay"><svg id="overlaySvg"></svg></div>
-  <canvas id="canvas" style="display:none"></canvas>
-  <canvas id="proc" style="display:none"></canvas>
-  
+  <div class="container">
+    <div class="header">
+      <h1>Enhanced OMR Scanner</h1>
+      <p>Auto-aligning, auto-capturing OMR evaluator</p>
+    </div>
+
+    <div class="controls">
+      <button id="startCamera" class="btn btn-primary">🎥 Start Camera</button>
+      <button id="setAnswerKey" class="btn btn-warning">📝 Answer Key Mode</button>
+      <button id="evaluateMode" class="btn btn-success">✅ Evaluate Mode</button>
+      <div id="modeIndicator" class="mode-indicator mode-answer-key">Answer Key Mode</div>
+    </div>
+
+    <div class="main-content">
+      <div class="camera-section">
+        <div class="camera-container">
+          <div class="camera-placeholder" id="cameraPlaceholder">
+            📷 Click "Start Camera" to begin
+          </div>
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="canvas" style="display:none;"></canvas>
+          <canvas id="proc" style="display:none;"></canvas>
+          <div class="overlay">
+            <svg id="overlaySvg"></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="results-section">
+        <div class="result-card">
+          <h2>📖 Instructions</h2>
+          <ol>
+            <li>Click "Start Camera" to begin</li>
+            <li>Scan the answer key first</li>
+            <li>Then switch to "Evaluate Mode"</li>
+            <li>Ensure sheet is framed within green border</li>
+          </ol>
+        </div>
+        <div class="result-card" id="resultsSection" style="display: none;">
+          <h2>📊 Results</h2>
+          <p><strong>Student ID:</strong> <span id="studentIdDisplay">----</span></p>
+          <p><strong>Score:</strong> <span id="scoreDisplay">--</span> / 20</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const video = document.getElementById('video');
-    const cvCanvas = document.getElementById('canvas');
+    const canvas = document.getElementById('canvas');
     const proc = document.getElementById('proc');
-    const overlay = document.getElementById('overlaySvg');
-    const ctx = cvCanvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
     const pctx = proc.getContext('2d');
+    const overlaySvg = document.getElementById('overlaySvg');
 
-    let answerKey=null, mode='answer';
-    document.getElementById('setAnswerKey').onclick=()=>{mode='answer';updateModeIndicator();}
-    document.getElementById('evaluateMode').onclick=()=>{if(!answerKey)return alert('Set key first');mode='evaluate';updateModeIndicator();}
-    function updateModeIndicator(){
-      const el=document.getElementById('modeIndicator');
-      el.textContent= mode==='answer'?'Answer Key Mode':'Evaluate Mode';
-      el.className= 'mode-indicator ' + (mode==='answer'?'mode-answer-key':'mode-evaluate');
+    let answerKey = null;
+    let mode = 'answer';
+    let stable = 0, lastImg = null;
+    const STABLE_THRESHOLD = 20;
+
+    document.getElementById('setAnswerKey').onclick = () => {
+      mode = 'answer';
+      updateModeIndicator();
+    };
+
+    document.getElementById('evaluateMode').onclick = () => {
+      if (!answerKey) return alert("Please scan the answer key first.");
+      mode = 'evaluate';
+      updateModeIndicator();
+    };
+
+    function updateModeIndicator() {
+      const el = document.getElementById('modeIndicator');
+      el.textContent = mode === 'answer' ? 'Answer Key Mode' : 'Evaluate Mode';
+      el.className = 'mode-indicator ' + (mode === 'answer' ? 'mode-answer-key' : 'mode-evaluate');
     }
 
-    async function startCam(){
-      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-      video.srcObject=stream;await video.play();
-      cvCanvas.width=video.videoWidth;cvCanvas.height=video.videoHeight;
-      proc.width = video.videoWidth;proc.height = video.videoHeight;
-      video.onloadedmetadata=updateOverlay;
-      requestAnimationFrame(processLoop);
-    }
-    document.getElementById('startCamera').onclick=startCam;
+    document.getElementById('startCamera').onclick = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      video.srcObject = stream;
+      await video.play();
+      video.style.display = "block";
+      document.getElementById('cameraPlaceholder').style.display = "none";
 
-    function updateOverlay(){
-      const w=video.videoWidth, h=video.videoHeight;
-      const portrait = h>w;
-      const rect = portrait ?
-        {x:0.10*w, y:0.10*h, w:0.80*w, h:0.80*h} :
-        {x:0.10*w, y:0.10*h, w:0.80*w, h:0.80*h};
-      const {x,y,w:rw,h:rh}=rect;
-      const c = (i,n,d)=>i + d*(n-1); // for corners
-      overlay.innerHTML = `
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      proc.width = video.videoWidth;
+      proc.height = video.videoHeight;
+
+      updateOverlayTemplate();
+      requestAnimationFrame(scanLoop);
+    };
+
+    function updateOverlayTemplate() {
+      const w = video.videoWidth, h = video.videoHeight;
+      const isPortrait = h > w;
+      const rect = isPortrait
+        ? { x: 0.15 * w, y: 0.10 * h, w: 0.70 * w, h: 0.80 * h }
+        : { x: 0.10 * w, y: 0.15 * h, w: 0.80 * w, h: 0.70 * h };
+
+      const { x, y, w: rw, h: rh } = rect;
+      overlaySvg.innerHTML = `
         <rect class="alignment-guide" x="${x}" y="${y}" width="${rw}" height="${rh}" rx="10"/>
         <circle class="corner-marker" cx="${x}" cy="${y}" r="8"/>
-        <circle class="corner-marker" cx="${x+rw}" cy="${y}" r="8"/>
-        <circle class="corner-marker" cx="${x+rw}" cy="${y+rh}" r="8"/>
-        <circle class="corner-marker" cx="${x}" cy="${y+rh}" r="8"/>
+        <circle class="corner-marker" cx="${x + rw}" cy="${y}" r="8"/>
+        <circle class="corner-marker" cx="${x + rw}" cy="${y + rh}" r="8"/>
+        <circle class="corner-marker" cx="${x}" cy="${y + rh}" r="8"/>
       `;
     }
 
-    let stable=0;
-    const STABLE_THRESHOLD=20;
-    let lastFrameData=null;
-
-    function processLoop(){
-      ctx.drawImage(video,0,0);
-      const img = ctx.getImageData(0,0,cvCanvas.width,cvCanvas.height);
+    function scanLoop() {
+      ctx.drawImage(video, 0, 0);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = img.data;
-      if(!lastFrameData) lastFrameData=new Uint8ClampedArray(data);
-      let diff=0;
-      for(let i=0;i<data.length;i+=4){
-        diff += Math.abs(data[i]-lastFrameData[i]);
+
+      if (!lastImg) lastImg = new Uint8ClampedArray(data);
+      let diff = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        diff += Math.abs(data[i] - lastImg[i]);
       }
-      const change = diff / data.length;
-      lastFrameData = new Uint8ClampedArray(data);
-      if(change<1){ stable++; } else { stable=0; }
-      if(stable===STABLE_THRESHOLD){
-        stable=0;
-        captureAndProcess();
+      const avgDiff = diff / data.length;
+      lastImg = new Uint8ClampedArray(data);
+      if (avgDiff < 1) stable++; else stable = 0;
+      if (stable === STABLE_THRESHOLD) {
+        stable = 0;
+        captureAndAnalyze();
       }
-      requestAnimationFrame(processLoop);
+      requestAnimationFrame(scanLoop);
     }
 
-    function captureAndProcess(){
-      ctx.drawImage(video,0,0);
-      const W=cvCanvas.width, H=cvCanvas.height;
-      // Grayscale
-      const img = ctx.getImageData(0,0,W,H);
-      const d=img.data;
-      for(let i=0;i<d.length;i+=4){
-        const g = 0.2126*d[i]+0.7152*d[i+1]+0.0722*d[i+2];
-        d[i]=d[i+1]=d[i+2]=g;
+    function captureAndAnalyze() {
+      ctx.drawImage(video, 0, 0);
+      const W = canvas.width, H = canvas.height;
+      const img = ctx.getImageData(0, 0, W, H);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const g = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2];
+        d[i] = d[i + 1] = d[i + 2] = g;
       }
-      proc.putImageData(img,0,0);
-      // detect border for perspective correct
-      const edges = detectBlackBorder(img,W,H);
-      if(!edges) return;
-      const warp = fourPointWarp(proc, edges, 1000,750);
-      analyzeWarp(warp);
+      pctx.putImageData(img, 0, 0);
+      const corners = detectBlackBorder(img, W, H);
+      if (!corners) return;
+      const warped = warpToFlat(proc, corners, 1000, 750);
+      processWarped(warped);
     }
 
-    // Tiny edge detection + border: find outermost dark rectangle
-    function detectBlackBorder(img,W,H){
-      const d=img.data;
-      const thresh=40;
-      const coords=[];
-      for(let y=0;y<H;y+=10){
-        for(let x=0;x<W;x+=10){
-          const i=(y*W+x)*4;
-          if(d[i]<thresh){
-            coords.push({x,y});
-          }
+    function detectBlackBorder(img, W, H) {
+      const d = img.data, threshold = 40, points = [];
+      for (let y = 0; y < H; y += 10) {
+        for (let x = 0; x < W; x += 10) {
+          const i = (y * W + x) * 4;
+          if (d[i] < threshold) points.push({ x, y });
         }
       }
-      if(coords.length<100)return null;
-      // bounding box
-      const xs=coords.map(p=>p.x), ys=coords.map(p=>p.y);
-      const minX=Math.min(...xs), maxX=Math.max(...xs);
-      const minY=Math.min(...ys), maxY=Math.max(...ys);
-      return [{x:minX,y:minY},{x:maxX,y:minY},{x:maxX,y:maxY},{x:minX,y:maxY}];
+      if (points.length < 100) return null;
+      const xs = points.map(p => p.x), ys = points.map(p => p.y);
+      return [
+        { x: Math.min(...xs), y: Math.min(...ys) },
+        { x: Math.max(...xs), y: Math.min(...ys) },
+        { x: Math.max(...xs), y: Math.max(...ys) },
+        { x: Math.min(...xs), y: Math.max(...ys) }
+      ];
     }
 
-    function fourPointWarp(canvasIn,pts,W2,H2){
-      // use simple library-free warp: assume bounding rect
-      const temp=document.createElement('canvas');
-      temp.width=W2; temp.height=H2;
-      const ictx=temp.getContext('2d');
-      ictx.drawImage(canvasIn, pts[0].x,pts[0].y, pts[2].x-pts[0].x, pts[2].y-pts[0].y, 0,0,W2,H2);
-      return ictx.getImageData(0,0,W2,H2);
+    function warpToFlat(srcCanvas, corners, outW, outH) {
+      const tmp = document.createElement("canvas");
+      tmp.width = outW; tmp.height = outH;
+      const ctx2 = tmp.getContext("2d");
+      ctx2.drawImage(srcCanvas,
+        corners[0].x, corners[0].y,
+        corners[2].x - corners[0].x,
+        corners[2].y - corners[0].y,
+        0, 0, outW, outH
+      );
+      return ctx2.getImageData(0, 0, outW, outH);
     }
 
-    function analyzeWarp(warp){
-      const W=warp.width, H=warp.height;
-      // ID region: right side
-      const idCols = 4, idRows=10;
-      const colW = 0.15*W/idCols, rowH=0.8*H/idRows;
-      const idX0=0.8*W, idY0=0.1*H;
-      const id = [];
-      for(let c=0;c<idCols;c++){
-        let best=-1, bestVal=0;
-        for(let r=0;r<idRows;r++){
-          const val = avgGrayRegion(warp,
-            idX0 + c*colW, idY0 + r*rowH, colW, rowH);
-          if(val>bestVal){ bestVal=val; best=r; }
+    function avgGray(img, x, y, w, h) {
+      const W = img.width, d = img.data;
+      let sum = 0, count = 0;
+      for (let i = x + 5; i < x + w - 5; i += 3) {
+        for (let j = y + 5; j < y + h - 5; j += 3) {
+          const idx = (Math.floor(j) * W + Math.floor(i)) * 4;
+          sum += 255 - d[idx];
+          count++;
         }
-        id.push(best);
       }
-      // Answers region: left area
-      const q=20, opts=5;
-      const aW=0.6*W, aH=0.8*H;
-      const ax0=0.1*W, ay0=0.1*H;
-      const rowH2 = aH/q, cellW= aW/opts;
-      const answers=[];
-      for(let i=0;i<q;i++){
-        let sel=null, mval=0;
-        for(let o=0;o<opts;o++){
-          const val = avgGrayRegion(warp,
-            ax0 + o*cellW, ay0 + i*rowH2, cellW, rowH2);
-          if(val>mval){ mval=val; sel=o; }
+      return sum / count;
+    }
+
+    function processWarped(img) {
+      const W = img.width, H = img.height;
+      const answers = [], ID = [];
+      const qRows = 20, qCols = 5;
+      const idCols = 4, idRows = 10;
+
+      const qx = 0.1 * W, qy = 0.1 * H;
+      const qW = 0.6 * W, qH = 0.8 * H;
+
+      const idx = 0.8 * W, idy = 0.1 * H;
+      const idW = 0.15 * W, idH = 0.8 * H;
+
+      for (let r = 0; r < qRows; r++) {
+        let best = -1, maxVal = 0;
+        for (let c = 0; c < qCols; c++) {
+          const val = avgGray(img,
+            qx + c * qW / qCols,
+            qy + r * qH / qRows,
+            qW / qCols, qH / qRows);
+          if (val > maxVal) { maxVal = val; best = c; }
         }
-        answers.push(sel);
+        answers.push(best);
       }
-      if(mode==='answer'){
+
+      for (let c = 0; c < idCols; c++) {
+        let best = -1, maxVal = 0;
+        for (let r = 0; r < idRows; r++) {
+          const val = avgGray(img,
+            idx + c * idW / idCols,
+            idy + r * idH / idRows,
+            idW / idCols, idH / idRows);
+          if (val > maxVal) { maxVal = val; best = r; }
+        }
+        ID.push(best);
+      }
+
+      if (mode === 'answer') {
         answerKey = answers;
-        alert('Answer key saved.');
+        alert("✅ Answer key saved.");
       } else {
-        let score=0;
-        answers.forEach((a,i)=>{ if(a===answerKey[i])score++; });
-        document.getElementById('scoreNumber').textContent = `${score} / 20`;
+        let score = 0;
+        for (let i = 0; i < 20; i++) {
+          if (answers[i] === answerKey[i]) score++;
+        }
+        document.getElementById('scoreDisplay').textContent = score;
+        document.getElementById('studentIdDisplay').textContent = ID.join('');
         document.getElementById('resultsSection').style.display = 'block';
       }
-    }
-
-    function avgGrayRegion(img, x0,y0,w,h){
-      const W=img.width, d=img.data;
-      let sum=0,c=0;
-      for(let y=y0+5;y<y0+h-5;y+=3){
-        for(let x=x0+5;x<x0+w-5;x+=3){
-          const i=(Math.floor(y)*W+Math.floor(x))*4;
-          sum += 255 - d[i];
-          c++;
-        }
-      }
-      return sum/c;
     }
   </script>
 </body>
