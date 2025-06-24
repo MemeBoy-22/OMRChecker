@@ -2,150 +2,212 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Enhanced OMR Sheet Scanner</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OMR Grader</title>
+  <script async src="https://docs.opencv.org/4.5.5/opencv.js"></script>
   <style>
     body {
       font-family: sans-serif;
       background: #f0f0f0;
-      margin: 0;
-      padding: 1rem;
-      text-align: center;
+      padding: 20px;
     }
-    .container {
-      max-width: 1200px;
-      margin: auto;
-      background: white;
-      border-radius: 12px;
-      padding: 1rem;
-      box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    }
-    .header {
-      margin-bottom: 1rem;
-    }
-    .controls {
-      margin-bottom: 1rem;
-    }
-    .btn {
-      padding: 10px 20px;
-      margin: 5px;
-      font-size: 16px;
-      cursor: pointer;
-      border: none;
-      border-radius: 8px;
-    }
-    .btn-primary { background: #007bff; color: white; }
-    .btn-warning { background: #ffc107; color: black; }
-    .btn-success { background: #28a745; color: white; }
-    .mode-indicator {
-      display: inline-block;
-      padding: 10px;
-      border-radius: 10px;
-      font-weight: bold;
-    }
-    .mode-answer-key { background: #bbdefb; color: #0d47a1; }
-    .mode-evaluate { background: #c8e6c9; color: #1b5e20; }
-    .main-content {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-    .camera-section, .results-section {
-      flex: 1 1 500px;
-    }
-    .camera-container {
-      position: relative;
-      background: #000;
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    #video {
-      width: 100%;
+    canvas {
       display: none;
     }
-    .camera-placeholder {
-      color: white;
-      padding: 40px;
+    .button {
+      padding: 10px 20px;
+      margin: 10px 0;
     }
-    .overlay {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      pointer-events: none;
-      z-index: 2;
-    }
-    .overlay svg {
-      width: 100%; height: 100%;
-    }
-    .alignment-guide {
-      stroke: #00ff00;
-      stroke-width: 3;
-      fill: none;
-      stroke-dasharray: 10,5;
-      opacity: 0.8;
-    }
-    .corner-marker {
-      fill: #ff0000;
-      opacity: 0.7;
-    }
-    .result-card {
-      background: #f9f9f9;
-      padding: 1rem;
-      border-radius: 10px;
-      margin-top: 1rem;
-      text-align: left;
+    #result {
+      margin-top: 20px;
+      background: #fff;
+      padding: 10px;
+      border: 1px solid #ccc;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>Enhanced OMR Scanner</h1>
-      <p>Auto-aligning, auto-capturing OMR evaluator</p>
-    </div>
+  <h2>📝 OMR Grader with OpenCV.js</h2>
 
-    <div class="controls">
-      <button id="startCamera" class="btn btn-primary">🎥 Start Camera</button>
-      <button id="setAnswerKey" class="btn btn-warning">📝 Answer Key Mode</button>
-      <button id="evaluateMode" class="btn btn-success">✅ Evaluate Mode</button>
-      <div id="modeIndicator" class="mode-indicator mode-answer-key">Answer Key Mode</div>
-    </div>
+  <input type="file" accept="image/*" id="answerKeyInput">
+  <button class="button" onclick="processAnswerKey()">Upload Answer Key</button>
+  <button class="button" id="viewAnswerKeyBtn" onclick="viewAnswerKey()" style="display:none;">View Answer Key</button>
 
-    <div class="main-content">
-      <div class="camera-section">
-        <div class="camera-container">
-          <div class="camera-placeholder" id="cameraPlaceholder">
-            📷 Click "Start Camera" to begin
-          </div>
-          <video id="video" autoplay playsinline muted></video>
-          <canvas id="canvas" style="display:none;"></canvas>
-          <canvas id="proc" style="display:none;"></canvas>
-          <div class="overlay">
-            <svg id="overlaySvg"></svg>
-          </div>
-        </div>
-      </div>
+  <br><br>
 
-      <div class="results-section">
-        <div class="result-card">
-          <h2>📖 Instructions</h2>
-          <ol>
-            <li>Click "Start Camera" to begin</li>
-            <li>Scan the answer key first</li>
-            <li>Then switch to "Evaluate Mode"</li>
-            <li>Ensure sheet is framed within green border</li>
-          </ol>
-        </div>
-        <div class="result-card" id="resultsSection" style="display: none;">
-          <h2>📊 Results</h2>
-          <p><strong>Student ID:</strong> <span id="studentIdDisplay">----</span></p>
-          <p><strong>Score:</strong> <span id="scoreDisplay">--</span> / 20</p>
-        </div>
-      </div>
-    </div>
-  </div>
+  <input type="file" accept="image/*" id="studentSheetInput">
+  <button class="button" onclick="gradeStudentSheet()">Upload Student Sheet</button>
 
-  <!-- Script with all logic, fixes, and real-time heatmap overlay -->
-  <!-- Please paste the entire script block from the previous message here -->
-  <!-- (Due to space, the full <script> is in the previous assistant message.) -->
+  <div id="result"></div>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    let answerKey = [];
+
+    function getImageData(file, callback) {
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        img.onload = function () {
+          const canvas = document.getElementById('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          callback(canvas);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function getMarkedBubbles(canvas) {
+      const src = cv.imread(canvas);
+      const gray = new cv.Mat();
+      const thresh = new cv.Mat();
+      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+      cv.threshold(gray, thresh, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+
+      const contours = new cv.MatVector();
+      const hierarchy = new cv.Mat();
+      cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      let bubbleData = [];
+
+      for (let i = 0; i < contours.size(); ++i) {
+        const cnt = contours.get(i);
+        const rect = cv.boundingRect(cnt);
+        const aspectRatio = rect.width / rect.height;
+
+        if (rect.width > 15 && rect.width < 35 && aspectRatio >= 0.9 && aspectRatio <= 1.1) {
+          const roi = thresh.roi(rect);
+          const filled = cv.countNonZero(roi);
+          const area = rect.width * rect.height;
+          const fillRatio = filled / area;
+
+          if (fillRatio > 0.4) {
+            bubbleData.push(rect);
+          }
+          roi.delete();
+        }
+        cnt.delete();
+      }
+
+      src.delete(); gray.delete(); thresh.delete(); contours.delete(); hierarchy.delete();
+      return bubbleData;
+    }
+
+    function groupBubblesByRow(bubbles) {
+      const rows = {};
+      for (const b of bubbles) {
+        const yKey = Math.round(b.y / 10); // Rough row bucket
+        if (!rows[yKey]) rows[yKey] = [];
+        rows[yKey].push(b);
+      }
+
+      // Convert to ordered array of rows with sorted bubbles
+      return Object.values(rows)
+        .map(row => row.sort((a, b) => a.x - b.x))
+        .sort((a, b) => a[0].y - b[0].y);
+    }
+
+    function extractAnswers(bubbleRows) {
+      let answers = [];
+      for (const row of bubbleRows.slice(0, 20)) {
+        if (row.length >= 5) {
+          const marked = row.map((b, i) => ({ i, x: b.x }));
+          const answerIndex = row.findIndex(b => b.filled); // optional
+          let minX = 99999, selected = -1;
+          for (let i = 0; i < row.length; i++) {
+            selected = i; // assume single fill
+          }
+          answers.push(String.fromCharCode(65 + selected)); // A-E
+        }
+      }
+      return answers;
+    }
+
+    function extractID(bubbleRows) {
+      const idCols = [bubbleRows[0], bubbleRows[1], bubbleRows[2], bubbleRows[3]];
+      let id = "";
+      for (const col of idCols) {
+        for (let i = 0; i < col.length; i++) {
+          const b = col[i];
+          if (b.filled) {
+            id += i;
+            break;
+          }
+        }
+      }
+      return id || "Unknown";
+    }
+
+    function markFilledBubbles(bubbles, canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.strokeStyle = 'red';
+      for (const b of bubbles) {
+        ctx.beginPath();
+        ctx.rect(b.x, b.y, b.width, b.height);
+        ctx.stroke();
+      }
+    }
+
+    function processAnswerKey() {
+      const file = document.getElementById('answerKeyInput').files[0];
+      if (!file) return;
+
+      getImageData(file, (canvas) => {
+        const bubbles = getMarkedBubbles(canvas);
+        const grouped = groupBubblesByRow(bubbles);
+        answerKey = extractAnswers(grouped);
+
+        if (answerKey.length !== 20) {
+          document.getElementById("result").innerHTML = "❌ Error: No answer key detected";
+          return;
+        }
+
+        document.getElementById('viewAnswerKeyBtn').style.display = 'inline-block';
+        document.getElementById("result").innerHTML = "✅ Answer Key uploaded successfully!";
+      });
+    }
+
+    function viewAnswerKey() {
+      if (answerKey.length === 0) {
+        document.getElementById("result").innerHTML = "❌ No answer key loaded.";
+        return;
+      }
+
+      let html = "<h4>Answer Key</h4>";
+      answerKey.forEach((ans, i) => {
+        html += `Q${i + 1}: ${ans}<br>`;
+      });
+      document.getElementById("result").innerHTML = html;
+    }
+
+    function gradeStudentSheet() {
+      const file = document.getElementById('studentSheetInput').files[0];
+      if (!file || answerKey.length !== 20) {
+        document.getElementById("result").innerHTML = "❌ Please upload both Answer Key and Student Sheet";
+        return;
+      }
+
+      getImageData(file, (canvas) => {
+        const bubbles = getMarkedBubbles(canvas);
+        const grouped = groupBubblesByRow(bubbles);
+        const answers = extractAnswers(grouped);
+        const studentID = extractID(grouped);
+
+        let score = 0;
+        for (let i = 0; i < 20; i++) {
+          if (answers[i] === answerKey[i]) score++;
+        }
+
+        let html = `<h4>Grading Result</h4>`;
+        html += `Student ID: <b>${studentID}</b><br>`;
+        html += `Score: <b>${score}/20</b><br>`;
+        document.getElementById("result").innerHTML = html;
+      });
+    }
+  </script>
 </body>
 </html>
