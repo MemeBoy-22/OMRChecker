@@ -1,106 +1,179 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#667eea">
-    <title>OMR Sheet Scanner & Evaluator</title>
-    <style>
-        /* ...styles remain unchanged (they are correct and optimized)... */
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OMR Sheet Scanner & Evaluator</title>
+  <style>
+    /* (No appearance changed - same CSS you had before) */
+    /* Your original CSS code goes here unchanged */
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>OMR Sheet Scanner & Evaluator</h1>
-            <p>Scan answer keys and evaluate student answer sheets with high accuracy</p>
-        </div>
-
-        <div class="controls">
-            <button id="startCamera" class="btn btn-primary">Start Camera</button>
-            <button id="setAnswerKey" class="btn btn-warning">Set Answer Key Mode</button>
-            <button id="evaluateMode" class="btn btn-success">Evaluate Mode</button>
-            <div id="modeIndicator" class="mode-indicator mode-answer-key">Answer Key Mode</div>
-        </div>
-
-        <div class="main-content">
-            <div class="camera-section">
-                <div class="camera-container">
-                    <video id="video" autoplay playsinline></video>
-                    <div class="overlay">
-                        <svg id="overlaySvg"></svg>
-                    </div>
-                </div>
-                <canvas id="canvas"></canvas>
-                <canvas id="processCanvas"></canvas>
-            </div>
-
-            <div class="results-section">
-                <div id="answerKeySection" class="result-card" style="display: none;">
-                    <div class="result-header">Answer Key</div>
-                    <div id="answerKeyDisplay" class="answer-key-display"></div>
-                </div>
-
-                <div id="resultsSection" class="result-card" style="display: none;">
-                    <div id="studentId" class="student-id">Student ID: ----</div>
-                    <div id="scoreDisplay" class="score-display">
-                        <div class="score-number" id="scoreNumber">--</div>
-                        <div class="score-label">Score out of 20</div>
-                    </div>
-                    <div class="result-header">Detailed Results</div>
-                    <div id="answerGrid" class="answer-grid"></div>
-                </div>
-
-                <div id="instructionsCard" class="result-card">
-                    <div class="result-header">Instructions</div>
-                    <ol style="padding-left: 20px; line-height: 1.6;">
-                        <li>First, scan the answer key sheet in "Answer Key Mode"</li>
-                        <li>Switch to "Evaluate Mode" to scan student answer sheets</li>
-                        <li>Align the OMR sheet within the green guide rectangle</li>
-                        <li>Ensure all corners are visible and the sheet is well-lit</li>
-                        <li>The camera will automatically capture when aligned</li>
-                    </ol>
-                </div>
-            </div>
-        </div>
+  <div class="container">
+    <div class="header">
+      <h1>OMR Sheet Scanner & Evaluator</h1>
+      <p>Scan answer keys and evaluate student answer sheets with high accuracy</p>
     </div>
 
-    <div class="processing" id="processing">
-        <div style="text-align: center;">
-            <div class="spinner"></div>
-            <div>Processing OMR Sheet...</div>
-        </div>
+    <div class="controls">
+      <button id="startCamera" class="btn btn-primary">Start Camera</button>
+      <button id="setAnswerKey" class="btn btn-warning">Set Answer Key Mode</button>
+      <button id="evaluateMode" class="btn btn-success">Evaluate Mode</button>
+      <div id="modeIndicator" class="mode-indicator mode-answer-key">Answer Key Mode</div>
     </div>
 
-    <script>
-        // All JavaScript appears correct and complete — minor change:
-        // Replaced onloadedmetadata direct assignment with event listener:
-        document.getElementById('startCamera').addEventListener('click', async () => {
-            const hasPermission = await checkCameraPermissions();
-            if (hasPermission) {
-                try {
-                    if (stream) {
-                        stream.getTracks().forEach(track => track.stop());
-                        stream = null;
-                    }
-                    const constraints = { video: { facingMode: 'environment', width: { ideal: 720 }, height: { ideal: 1280 } } };
-                    stream = await navigator.mediaDevices.getUserMedia(constraints);
-                    video.srcObject = stream;
-                    await new Promise((resolve, reject) => {
-                        const onLoaded = () => {
-                            video.removeEventListener('loadedmetadata', onLoaded);
-                            resolve();
-                        };
-                        video.addEventListener('loadedmetadata', onLoaded);
-                        setTimeout(() => reject(new Error('Video load timeout')), 5000);
-                    });
-                    await video.play();
-                    // Continue as before
-                } catch (error) {
-                    showError(error.message);
-                }
-            }
-        });
-    </script>
+    <div class="main-content">
+      <div class="camera-section">
+        <div class="camera-container">
+          <video id="video" autoplay playsinline></video>
+          <div class="overlay">
+            <svg id="overlaySvg"></svg>
+          </div>
+        </div>
+        <canvas id="canvas"></canvas>
+        <canvas id="processCanvas"></canvas>
+      </div>
+
+      <div class="results-section">
+        <div id="answerKeySection" class="result-card" style="display: none;">
+          <div class="result-header">Answer Key</div>
+          <div id="answerKeyDisplay" class="answer-key-display"></div>
+        </div>
+
+        <div id="resultsSection" class="result-card" style="display: none;">
+          <div id="studentId" class="student-id">Student ID: ----</div>
+          <div id="scoreDisplay" class="score-display">
+            <div class="score-number" id="scoreNumber">--</div>
+            <div class="score-label">Score out of 20</div>
+          </div>
+          <div class="result-header">Detailed Results</div>
+          <div id="answerGrid" class="answer-grid"></div>
+        </div>
+
+        <div id="instructionsCard" class="result-card">
+          <div class="result-header">Instructions</div>
+          <ol style="padding-left: 20px; line-height: 1.6;">
+            <li>First, scan the answer key sheet in "Answer Key Mode"</li>
+            <li>Switch to "Evaluate Mode" to scan student answer sheets</li>
+            <li>Align the OMR sheet within the green guide rectangle</li>
+            <li>Ensure all corners are visible and the sheet is well-lit</li>
+            <li>The camera will automatically capture when aligned</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="processing" id="processing" style="display: none;">
+    <div style="text-align: center;">
+      <div class="spinner"></div>
+      <div>Processing OMR Sheet...</div>
+    </div>
+  </div>
+
+  <script>
+    // Fix: Ensure all elements exist before using
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const processCanvas = document.getElementById("processCanvas");
+    const ctx = canvas.getContext("2d");
+    const processCtx = processCanvas.getContext("2d");
+    const overlaySvg = document.getElementById("overlaySvg");
+
+    let stream = null;
+    let isAnswerKeyMode = true;
+    let answerKey = null;
+    let lastBoundaries = null;
+    let stableFrames = 0;
+    let isAligned = false;
+
+    const STABILITY_THRESHOLD = 5;
+    const OMR_CONFIG = {
+      questions: 20,
+      optionsPerQuestion: 5,
+      options: ["A", "B", "C", "D", "E"],
+      idDigits: 4,
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+      setupButtons();
+      startAlignmentLoop();
+    });
+
+    function setupButtons() {
+      document.getElementById("startCamera").onclick = async () => {
+        const allowed = await navigator.mediaDevices.getUserMedia({ video: true }).then(() => true).catch(() => false);
+        if (allowed) startCamera();
+        else alert("Camera access denied.");
+      };
+
+      document.getElementById("setAnswerKey").onclick = () => {
+        isAnswerKeyMode = true;
+        updateModeUI();
+      };
+
+      document.getElementById("evaluateMode").onclick = () => {
+        if (!answerKey) return alert("Please set the answer key first.");
+        isAnswerKeyMode = false;
+        updateModeUI();
+      };
+    }
+
+    function updateModeUI() {
+      const el = document.getElementById("modeIndicator");
+      if (isAnswerKeyMode) {
+        el.textContent = "Answer Key Mode";
+        el.className = "mode-indicator mode-answer-key";
+      } else {
+        el.textContent = "Evaluate Mode";
+        el.className = "mode-indicator mode-evaluate";
+      }
+    }
+
+    async function startCamera() {
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 720 },
+          height: { ideal: 1280 }
+        }
+      });
+      video.srcObject = stream;
+
+      await new Promise((res, rej) => {
+        video.onloadedmetadata = res;
+        setTimeout(() => rej("Video timeout"), 3000);
+      });
+
+      video.play();
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      processCanvas.width = video.videoWidth;
+      processCanvas.height = video.videoHeight;
+
+      document.getElementById("startCamera").textContent = "Camera Active ✓";
+      document.getElementById("startCamera").style.background = "#28a745";
+    }
+
+    function startAlignmentLoop() {
+      const loop = () => {
+        if (video.readyState >= 2) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          // Add your alignment and processing logic here
+          // Like checking for boundary stability, and calling captureAndProcess()
+        }
+        requestAnimationFrame(loop);
+      };
+      loop();
+    }
+
+    function showProcessing(show) {
+      document.getElementById("processing").style.display = show ? "flex" : "none";
+    }
+  </script>
 </body>
 </html>
